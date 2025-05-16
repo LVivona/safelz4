@@ -1,6 +1,4 @@
 import sys
-import datetime
-from collections import defaultdict
 
 import atheris
 
@@ -8,18 +6,21 @@ with atheris.instrument_imports():
     import safelz4
 
 
-EXCEPTIONS = defaultdict(int)
-START = datetime.datetime.now()
-DT = datetime.timedelta(seconds=30)
+def TestDecompCorruptBlock(data: bytes):
+    if len(data) >= 4:
+        size = int.from_bytes(bytes=data[:4], byteorder="little")
+        if size > 20_000_000:
+            return
 
-def TestDecompCorruptBlock(data): 
-    global START
+        try:
+            safelz4._block.decompress_size_prepended(data)
+        except safelz4.LZ4Exception:
+            pass
 
-    if datetime.datetime.now() - START > DT:
-        for e, n in EXCEPTIONS.items():
-            print(e, n)
-        START = datetime.datetime.now()
-
+        try:
+            safelz4._block.decompress_with_dict(data, data)
+        except safelz4.LZ4Exception:
+            pass
 
 
 atheris.Setup(sys.argv, TestDecompCorruptBlock)
