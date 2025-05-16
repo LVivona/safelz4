@@ -1,5 +1,5 @@
 import os
-from typing import Optional, overload, Union
+from typing import Optional, Union
 from typing_extensions import Self
 
 from enum import IntEnum, Enum
@@ -63,7 +63,6 @@ class FrameInfo:
     block_checksums: bool
     content_checksum: bool
     legacy_frame: bool
-    @overload
     def __init__(
         self,
         block_size: BlockSize,
@@ -95,9 +94,7 @@ class FrameInfo:
     def legacy_frame(self) -> bool: ...
     @legacy_frame.setter
     def legacy_frame(self, value: bool) -> None: ...
-    @overload
     def __str__(self) -> str: ...
-    @overload
     def __repr__(self) -> str: ...
 
 def enflate(input: bytes) -> bytes:
@@ -164,7 +161,7 @@ def deflate_file_with_info(
     info: Optional[FrameInfo] = None,
 ) -> None:
     """
-    Compresses a buffer of bytes into a file using using the LZ4 frame format, with more control on Block Linkage.
+    Compresses a buffer of bytes into a file using using the LZ4 frame format, with more control on Frame.
 
     Args:
         filename (`str`, or `os.PathLike`):
@@ -176,5 +173,24 @@ def deflate_file_with_info(
 
     Returns:
         `None`
+    """
+    ...
+
+def deflate_with_info(
+    input: bytes,
+    info: Optional[FrameInfo] = None,
+) -> None:
+    """
+    Compresses a buffer of bytes into byte buffer using using the LZ4 frame format, with more control on Frame.
+
+    Args:
+        input (`bytes`):
+            fixed set of bytes to be compressed.
+        info (`FrameInfo, *optional*, defaults to `None``):
+            The metadata for de/compressing with lz4 frame format.
+
+    Returns:
+        `bytes`:
+            The LZ4 frame-compressed representation of the input bytes.
     """
     ...

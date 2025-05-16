@@ -1,6 +1,3 @@
-from typing import overload
-
-@overload
 def compress(input: bytes) -> bytes:
     """
     Compress the input bytes using LZ4.
@@ -14,7 +11,6 @@ def compress(input: bytes) -> bytes:
     """
     ...
 
-@overload
 def compress_prepend_size(input: bytes) -> bytes:
     """
     Compress the input bytes using LZ4 and prepend the original size as a little-endian u32.
@@ -30,12 +26,9 @@ def compress_prepend_size(input: bytes) -> bytes:
     """
     ...
 
-@overload
 def compress_into(input: bytes, output: bytearray) -> int:
     """
-    Compress the input bytes into the provided output buffer.
-
-    The output buffer must be preallocated with a size obtained from `get_maximum_output_size`.
+    Compress the input bytes into the provided output buffer. The output buffer must be preallocated with a size obtained from `get_maximum_output_size`.
 
     Args:
         input (`bytes`):
@@ -48,7 +41,6 @@ def compress_into(input: bytes, output: bytearray) -> int:
     """
     ...
 
-@overload
 def compress_with_dict(input: bytes, dictionary: bytes) -> bytes:
     """
     Compress the input bytes using a user-provided dictionary.
@@ -64,32 +56,28 @@ def compress_with_dict(input: bytes, dictionary: bytes) -> bytes:
     """
     ...
 
-@overload
-def decompress(input: bytes, output: bytearray) -> int:
+def decompress(input: bytes, min_size: int) -> int:
     """
     Decompress the input block bytes.
 
     Args:
         input (`bytes`)
             fixed set of bytes to be decompressed
-        output (`bytearray`):
-            Mutable buffer to hold decompressed bytes.
+        min_size (`int`):
+            minimum possible size of uncompressed bytes
 
     Returns:
-        `int`: Number of bytes written to the output buffer.
+        `bytes`: decompressed repersentation of the compressed bytes.
     """
     ...
 
-@overload
 def decompress_into(input: bytes, output: bytearray) -> int:
     """
-    Decompress input bytes into the provided output buffer.
-
-    The output buffer must be preallocated with enough space for the uncompressed data.
+    Decompress input bytes into the provided output buffer. The output buffer must be preallocated with enough space for the uncompressed data.
 
     Args:
         input (`bytes`):
-            fixed set of bytes to be decompressed.
+            Fixed set of bytes to be decompressed.
         output (`bytearray`):
             Mutable buffer to hold decompressed bytes.
 
@@ -98,7 +86,6 @@ def decompress_into(input: bytes, output: bytearray) -> int:
     """
     ...
 
-@overload
 def decompress_size_prepended(input: bytes) -> bytes:
     """
     Decompress input bytes that were compressed with the original size prepended.
@@ -113,7 +100,6 @@ def decompress_size_prepended(input: bytes) -> bytes:
     """
     ...
 
-@overload
 def decompress_with_dict(input: bytes, ext_dict: bytes) -> bytes:
     """
     Decompress input bytes using a user-provided dictionary of bytes.
@@ -127,4 +113,16 @@ def decompress_with_dict(input: bytes, ext_dict: bytes) -> bytes:
     Returns:
         `bytes`: Decompressed data.
     """
+    ...
+
+def get_maximum_output_size(input_len: int) -> int:
+    """
+    Obtain the maximum output size of the block
+
+    Args:
+        input_len (`int`):
+            length of the bytes we need to allocate to compress into fixed buffer.
+    Returns:
+        `int`: 
+            maximum possible size of the output buffer needs to be."""
     ...
