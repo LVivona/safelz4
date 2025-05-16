@@ -49,21 +49,13 @@ class FrameInfo:
         legacy_frame: If set, use the legacy frame format.
     """
 
-    __slots__ = (
-        content_size,
-        block_size,
-        block_mode,
-        block_checksums,
-        content_checksum,
-        legacy_frame,
-    )
     content_size: Optional[int]
     block_size: BlockSize
     block_mode: BlockMode
     block_checksums: bool
     content_checksum: bool
     legacy_frame: bool
-    def __init__(
+    def __new__(
         self,
         block_size: BlockSize,
         block_mode: BlockMode,
