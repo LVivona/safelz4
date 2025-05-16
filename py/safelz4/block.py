@@ -4,7 +4,7 @@ from typing import Tuple
 
 __all__ = [
     "compress",
-    "compress_str_utf8_into",
+    "compress_str_utf8",
     "compress_into",
     "compress_utf8_prepend_size",
     "compress_prepend_size",
