@@ -3,24 +3,32 @@ use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 use pyo3::Bound as PyBound;
 
-/// Compress all bytes of input into output. The method chooses an appropriate hashtable to lookup duplicates. output should be preallocated with a size of get_maximum_output_size.
+/// Obtain the maximum output size of the block
+///
+/// Args:
+///     input_len (`int`):
+///         length of the bytes we need to allocate to compress into fixed buffer.
+/// Returns:
+///     `int` maximum possible size of the output buffer needs to be.
+#[pyfunction]
+#[pyo3(signature = (input_len))]
+#[inline]
+fn get_maximum_output_size(input_len: usize) -> usize {
+    lz4_flex::block::get_maximum_output_size(input_len)
+}
+
+/// Compress all bytes of input.
 ///
 /// Args:
 ///     input (`bytes`):
-///         decompressed planetext buffer converted.
-///     output (`bytesarray`):
-///          output buffer to write compressed data into
+///         abirtary set of bytes.
 /// Returns:
-///     (`bytes`):
-///         The compressed bytes of the buffer.
+///     `bytes`: lz4 compressed block.
 #[pyfunction]
-#[pyo3(signature = (input, output))]
-fn compress_into(input: &[u8], output: PyBound<'_, PyByteArray>) -> PyResult<usize> {
-    let out = unsafe { output.as_bytes_mut() };
-    let size =
-        lz4_flex::compress_into(input, out).map_err(|e| LZ4Exception::new_err(format!("{e}")))?;
-
-    Ok(size)
+#[pyo3(signature = (input))]
+fn compress<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes>> {
+    let output = lz4_flex::compress(input);
+    Ok(PyBytes::new(py, &output))
 }
 
 /// Compress all bytes of input into output. The uncompressed size will be prepended as a little endian u32. Can be used in conjunction with decompress_size_prepended
@@ -40,20 +48,34 @@ fn compress_prepend_size<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound
     Ok(pybytes)
 }
 
-/// Compress all bytes of input.
+/// Compress the input bytes into the provided output buffer. The output buffer must be preallocated with a size obtained from `get_maximum_output_size`.
 ///
 /// Args:
 ///     input (`bytes`):
-///         abirtary set of bytes.
+///         decompressed planetext buffer converted.
+///     output (`bytesarray`):
+///          output buffer to write compressed data into
 /// Returns:
-///     `bytes`: lz4 compressed block.
+///     (`bytes`):
+///         The compressed bytes of the buffer.
 #[pyfunction]
-#[pyo3(signature = (input))]
-fn compress<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes>> {
-    let output = lz4_flex::compress(input);
-    Ok(PyBytes::new(py, &output))
+#[pyo3(signature = (input, output))]
+fn compress_into(input: &[u8], output: PyBound<'_, PyByteArray>) -> PyResult<usize> {
+    let out = unsafe { output.as_bytes_mut() };
+    let size =
+        lz4_flex::compress_into(input, out).map_err(|e| LZ4Exception::new_err(format!("{e}")))?;
+
+    Ok(size)
 }
 
+/// Compress the input bytes using a user-provided dictionary.
+/// Args:
+///     input (`bytes`):
+///         fixed set of bytes to be compressed.
+///     dictionary (`bytes`):
+///         Dictionary used for compression.
+/// Returns:
+///     `bytes`: fixed set of bytes to be decompressed.
 #[pyfunction]
 #[pyo3(signature = (input, ext_dict))]
 fn compress_with_dict<'py>(
@@ -69,11 +91,11 @@ fn compress_with_dict<'py>(
 ///
 /// Args:
 ///     buffer (`bytes`):
-///         compressed bytes format, of an abritrary size
+///         Fixed set of bytes to be decompressed.
 ///     output (`bytearray`):
 ///         mutable buffer that allows to write out the bytes
 /// Returns:
-///     `int`: size of the bytes compressed
+///     `int`: Number of bytes written to the output buffer.
 #[pyfunction]
 #[pyo3(signature = (input, output))]
 fn decompress_into(input: &[u8], output: PyBound<'_, PyByteArray>) -> PyResult<usize> {
@@ -92,8 +114,14 @@ fn decompress_into(input: &[u8], output: PyBound<'_, PyByteArray>) -> PyResult<u
     Ok(size)
 }
 
-///
-
+/// Decompress the input block bytes.
+/// Args:
+///     input (`bytes`)
+///         fixed set of bytes to be decompressed
+///     min_size (`int`):
+///         minimum possible size of uncompressed bytes
+/// Returns:
+///     `bytes`: decompressed repersentation of the compressed bytes.
 #[pyfunction]
 #[pyo3(signature = (input, min_size))]
 fn decompress<'py>(
@@ -143,11 +171,12 @@ fn decompress_with_dict<'py>(
     input: &[u8],
     ext_dict: &[u8],
 ) -> PyResult<PyBound<'py, PyBytes>> {
-    let output = lz4_flex::block::compress_prepend_size_with_dict(input, ext_dict);
+    let output = lz4_flex::block::decompress_size_prepended_with_dict(input, ext_dict)
+        .map_err(|e| LZ4Exception::new_err(format!("decompression error: {e:?}")))?;
     Ok(PyBytes::new(py, &output))
 }
 
-/// pyo3 register _block module
+/// rust block module handles over all structure of the compression format.
 ///
 /// ```ignore
 /// from .safelz4_rs import _block
@@ -166,6 +195,7 @@ pub(crate) fn register_block_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     block_m.add_function(wrap_pyfunction!(decompress_into, &block_m)?)?;
     block_m.add_function(wrap_pyfunction!(decompress_size_prepended, &block_m)?)?;
     block_m.add_function(wrap_pyfunction!(decompress_with_dict, &block_m)?)?;
+    block_m.add_function(wrap_pyfunction!(get_maximum_output_size, &block_m)?)?;
 
     m.add_submodule(&block_m)?;
     Ok(())

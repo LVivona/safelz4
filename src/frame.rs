@@ -112,6 +112,7 @@ impl From<PyFramInfo> for FrameInfo {
 #[pymethods]
 impl PyFramInfo {
     #[new]
+    #[pyo3(signature = (block_size, block_mode, block_checksums = None, content_checksum = None, content_size = None, legacy_frame = None))]
     fn new(
         block_size: PyBlockSize,
         block_mode: PyBlockMode,
@@ -196,7 +197,15 @@ impl PyFramInfo {
     }
 }
 
+/// Compresses a buffer of LZ4-compressed bytes using the LZ4 frame format.
 ///
+/// Args:
+///     input (`bytes`):
+///         An arbitrary byte buffer to be compressed.
+///
+/// Returns:
+///     `bytes`:
+///         The LZ4 frame-compressed representation of the input bytes.
 #[pyfunction]
 #[pyo3(signature = (input))]
 fn deflate<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes>> {
@@ -216,7 +225,14 @@ fn deflate<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes>
     ))
 }
 
-///
+/// Compresses a buffer of bytes into a file using using the LZ4 frame format.
+/// Args:
+///     filename (`str` or `os.PathLike`):
+///         The filename we are saving into.
+///     input (`bytes`):
+///         un-compressed representation of the input bytes.
+/// Returns:
+///     `None`
 #[pyfunction]
 #[pyo3(signature = (filename, input))]
 fn deflate_file(filename: PathBuf, input: &[u8]) -> PyResult<()> {
@@ -234,6 +250,18 @@ fn deflate_file(filename: PathBuf, input: &[u8]) -> PyResult<()> {
         .map_err(|e| PyIOError::new_err(format!("Failed to finish LZ4 compression: {}", e)))
 }
 
+/// Compresses a buffer of bytes into a file using using the LZ4 frame format, with more control on Frame.
+///
+/// Args:
+///    filename (`str`, or `os.PathLike`):
+///        The filename we are saving into.
+///    input (`bytes`):
+///        fixed set of bytes to be compressed.
+///    info (`FrameInfo, *optional*, defaults to `None``):
+///        The metadata for de/compressing with lz4 frame format.
+///
+/// Returns:
+///    `None`
 #[pyfunction]
 #[pyo3(signature = (filename, input, info = None))]
 fn deflate_file_with_info(
@@ -254,6 +282,44 @@ fn deflate_file_with_info(
         .map_err(|e| PyIOError::new_err(format!("Failed to finish LZ4 compression: {}", e)))
 }
 
+/// Compresses a buffer of bytes into byte buffer using using the LZ4 frame format, with more control on Frame.
+/// Args:
+///     input (`bytes`):
+///         fixed set of bytes to be compressed.
+///     info (`FrameInfo, *optional*, defaults to `None``):
+///         The metadata for de/compressing with lz4 frame format.
+/// Returns:
+///     `bytes`:
+///         The LZ4 frame-compressed representation of the input bytes.
+#[pyfunction]
+#[pyo3(signature = (input, info = None))]
+fn deflate_with_info<'py>(
+    py: Python<'py>,
+    input: &[u8],
+    info: Option<PyFramInfo>,
+) -> PyResult<PyBound<'py, PyBytes>> {
+    let wtr = Vec::with_capacity(input.len());
+
+    let info_f: FrameInfo = info.unwrap_or_default().into();
+
+    let mut encoder = FrameEncoder::with_frame_info(info_f, wtr);
+    encoder.write_all(input)?;
+
+    let output = encoder
+        .finish()
+        .map_err(|e| PyIOError::new_err(format!("Failed to finish LZ4 compression: {}", e)))?;
+
+    Ok(PyBytes::new(py, &output))
+}
+/// Decompresses a buffer of bytes using thex LZ4 frame format.
+/// Args:
+///     input (`bytes`):
+///         A byte containing LZ4-compressed data (in frame format).
+///         Typically obtained from a prior call to an `deflate`, `deflate_with_info` or read from
+///         a compressed file `deflate_file`, or `deflate_file_with_info`.
+/// Returns:
+///     `bytes`:
+///         The decompressed (original) representation of the input bytes.
 #[pyfunction]
 #[pyo3(signature = (input))]
 fn enflate<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes>> {
@@ -263,6 +329,15 @@ fn enflate<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes>
     Ok(PyBytes::new(py, &buffer))
 }
 
+/// Decompresses a buffer of bytes into a file using thex LZ4 frame format.
+///
+/// Args:
+///    filename (`str` or `os.PathLike`):
+///        The filename we are loading from.
+///
+/// Returns:
+///    `bytes`:
+///        The decompressed (original) representation of the input bytes.
 #[pyfunction]
 #[pyo3(signature = (filename))]
 fn enflate_file(py: Python<'_>, filename: PathBuf) -> PyResult<PyBound<'_, PyBytes>> {
@@ -276,15 +351,22 @@ fn enflate_file(py: Python<'_>, filename: PathBuf) -> PyResult<PyBound<'_, PyByt
     Ok(PyBytes::new(py, &buffer))
 }
 
-/// rust frame module handles over all structure of the compression format.
+/// register frame module handles which handles Frame de/compression of frames.
 ///
-/// Frame
+/// ```ignore
+/// from .safelz4_rs import _frame
+///
+/// plaintext = b"eeeeeeee Hello world this is an example of plaintext being compressed eeeeeeeeeeeeeee"
+/// output = _frame.deflate(plaintext)
+/// output = _frame.enflate(output)
+/// ```
 pub(crate) fn register_frame_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let frame_m = PyModule::new(m.py(), "_frame")?;
 
     frame_m.add_function(wrap_pyfunction!(deflate, &frame_m)?)?;
     frame_m.add_function(wrap_pyfunction!(deflate_file, &frame_m)?)?;
     frame_m.add_function(wrap_pyfunction!(deflate_file_with_info, &frame_m)?)?;
+    frame_m.add_function(wrap_pyfunction!(deflate_with_info, &frame_m)?)?;
     frame_m.add_function(wrap_pyfunction!(enflate_file, &frame_m)?)?;
     frame_m.add_function(wrap_pyfunction!(enflate, &frame_m)?)?;
 
