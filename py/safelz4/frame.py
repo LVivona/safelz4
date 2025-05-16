@@ -2,7 +2,19 @@ import os
 
 from typing import Union, Optional
 import safelz4._frame as _frame
-from safelz4._frame import FrameInfo
+from safelz4._frame import FrameInfo, BlockMode, BlockSize
+
+__all__ = [
+    "FrameInfo",
+    "BlockMode",
+    "BlockSize",
+    "enflate",
+    "deflate",
+    "enflate_file",
+    "deflate_file",
+    "deflate_file_with_info",
+    "deflate_with_info",
+]
 
 
 def enflate(input: bytes) -> bytes:
@@ -108,3 +120,23 @@ def deflate_file_with_info(
         `None`
     """
     return _frame.deflate_file_with_info(filename, input, info)
+
+
+def deflate_with_info(
+    input: bytes,
+    info: Optional[FrameInfo] = None,
+) -> None:
+    """
+    Compresses a buffer of bytes into byte buffer using using the LZ4 frame format, with more control on Frame.
+
+    Args:
+        input (`bytes`):
+            fixed set of bytes to be compressed.
+        info (`FrameInfo, *optional*, defaults to `None``):
+            The metadata for de/compressing with lz4 frame format.
+
+    Returns:
+        `bytes`:
+            The LZ4 frame-compressed representation of the input bytes.
+    """
+    return _frame.deflate_with_info(input, info)
