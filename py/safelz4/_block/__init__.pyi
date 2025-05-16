@@ -123,6 +123,6 @@ def get_maximum_output_size(input_len: int) -> int:
         input_len (`int`):
             length of the bytes we need to allocate to compress into fixed buffer.
     Returns:
-        `int`: 
+        `int`:
             maximum possible size of the output buffer needs to be."""
     ...
