@@ -1,8 +1,8 @@
 from safelz4._safelz4_rs import _block
 
 compress = _block.compress
-compress_into = _block.compress_into
 compress_prepend_size = _block.compress_prepend_size
+compress_into = _block.compress_into
 compress_with_dict = _block.compress_with_dict
 
 decompress = _block.decompress

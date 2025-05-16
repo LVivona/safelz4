@@ -9,7 +9,7 @@ __all__ = [
     "compress_utf8_prepend_size",
     "compress_prepend_size",
     "decompress" "decompress_into",
-    "decompress_prepend_size",
+    "decompress_size_prepended",
     "decompress_with_dict" "get_maximum_output_size",
 ]
 
@@ -129,7 +129,7 @@ def decompress_into(input: bytes, output: bytearray) -> int:
     return _block.decompress_into(input, output)
 
 
-def decompress_prepend_size(input: bytes) -> bytes:
+def decompress_size_prepended(input: bytes) -> bytes:
     """
     Decompress lz4 compressed block byte file format
 

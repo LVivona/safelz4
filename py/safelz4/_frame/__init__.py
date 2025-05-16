@@ -9,5 +9,7 @@ FrameInfo = _frame.FrameInfo
 deflate = _frame.deflate
 deflate_file = _frame.deflate_file
 deflate_file_with_info = _frame.deflate_file_with_info
+deflate_with_info = _frame.deflate_with_info
+
 enflate = _frame.enflate
 enflate_file = _frame.enflate_file
