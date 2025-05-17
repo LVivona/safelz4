@@ -99,15 +99,7 @@ fn compress_with_dict<'py>(
 #[pyfunction]
 #[pyo3(signature = (input, output))]
 fn decompress_into(input: &[u8], output: PyBound<'_, PyByteArray>) -> PyResult<usize> {
-    let length = input.len();
-    let max_length = lz4_flex::block::get_maximum_output_size(length);
     let output_ref = unsafe { output.as_bytes_mut() };
-
-    if output_ref.len() > max_length {
-        return Err(LZ4Exception::new_err(
-            "bytearray exceeds the max output size of the data.",
-        ));
-    }
 
     let size = lz4_flex::decompress_into(input, output_ref)
         .map_err(|e| LZ4Exception::new_err(format!("decompression error {e:?}")))?;
