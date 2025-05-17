@@ -35,7 +35,7 @@ def enflate(input: bytes) -> bytes:
     ```python
     from safelz4.frame import enflate, deflate
     input_c = b'\x04"M\x18`@\x82O\x00\x00\x00\xff4hello world this is an '\
-              b'example of text I would like to compresss ee\x02\x00&`eeeeee '\
+              b'example of text I would like to compresss ee\x02\x00&`eeeeee'\
               b'\x00\x00\x00\x00'
 
     output = enflate(input_c)
@@ -84,8 +84,8 @@ def deflate(input: bytes) -> bytes:
 
     output = deflate(input_d)
     expected = b'\x04"M\x18`@\x82O\x00\x00\x00\xff4hello world this is an '\
-               b'example of text I would like to compresss ee\x02\x00&`'\
-               b'eeeeee \x00\x00\x00\x00'
+               b'example of text I would like to compresss ee\x02\x00&`eeeeee'\
+               b'\x00\x00\x00\x00'
     assert output == expected
     ```
     """
