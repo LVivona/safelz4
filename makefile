@@ -15,6 +15,7 @@ help:
 	@echo "  help      - Show this help message"
 	@echo "  clean     - Remove build artifacts and cache files"
 	@echo "  test      - Run all tests"
+	@echo "  flake     - Run flake8 lint checking on source files"
 	@echo "  lint      - Run Black lint check on all source files"
 	@echo "  check     - Run Black lint check without modifying files"
 	@echo "  format    - Format all source files with Black"
@@ -28,6 +29,9 @@ clean:
 test:
 	maturin develop
 	$(PYTEST) -sv tests/
+
+flake:
+	flake8 py/safelz4/ -v --max-line-length 80
 
 lint: 
 	$(BLACK) $(BLACK_OPTS) $(SRC_DIRS)
