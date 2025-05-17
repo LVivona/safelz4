@@ -34,10 +34,14 @@ def enflate(input: bytes) -> bytes:
     Example:
     ```python
     from safelz4.frame import enflate, deflate
-    input_c = b'\x04"M\x18`@\x82O\x00\x00\x00\xff4hello world this is an example of text I would like to compresss ee\x02\x00&`eeeeee\x00\x00\x00\x00'
+    input_c = b'\x04"M\x18`@\x82O\x00\x00\x00\xff4hello world this is an '\
+              b'example of text I would like to compresss ee\x02\x00&`eeeeee '\
+              b'\x00\x00\x00\x00'
 
     output = enflate(input_c)
-    expected = b"hello world this is an example of text I would like to compresss eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    expected = b"hello world this is an example of text I would like to "\
+               b"compresss eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"\
+               b"eeeeeeeeeeeeeeeeee"
     assert expected == output
     ```
     """
@@ -74,10 +78,14 @@ def deflate(input: bytes) -> bytes:
     Example:
     ```python
     from safelz4.frame import deflate
-    input_d = b'\x04"M\x18`@\x82O\x00\x00\x00\xff4hello world this is an example of text I would like to compresss ee\x02\x00&`eeeeee\x00\x00\x00\x00'
+    input_d = b"hello world this is an example of text I would like to "\
+               b"compresss eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"\
+               b"eeeeeeeeeeeeeeeeee"
 
     output = deflate(input_d)
-    expected = b"hello world this is an example of text I would like to compresss eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    expected = b'\x04"M\x18`@\x82O\x00\x00\x00\xff4hello world this is an '\
+               b'example of text I would like to compresss ee\x02\x00&`'\
+               b'eeeeee \x00\x00\x00\x00'
     assert output == expected
     ```
     """
@@ -106,7 +114,8 @@ def deflate_file_with_info(
     info: Optional[FrameInfo] = None,
 ) -> None:
     """
-    Compresses a buffer of bytes into a file using using the LZ4 frame format, with more control on Block Linkage.
+    Compresses a buffer of bytes into a file using using the LZ4 frame format,
+    with more control on Block Linkage.
 
     Args:
         filename (`str`, or `os.PathLike`):
@@ -127,7 +136,8 @@ def deflate_with_info(
     info: Optional[FrameInfo] = None,
 ) -> None:
     """
-    Compresses a buffer of bytes into byte buffer using using the LZ4 frame format, with more control on Frame.
+    Compresses a buffer of bytes into byte buffer using using
+    the LZ4 frame format, with more control on Frame.
 
     Args:
         input (`bytes`):

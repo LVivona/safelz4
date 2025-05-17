@@ -1,16 +1,16 @@
 import safelz4._block as _block
 
-from typing import Tuple
-
 __all__ = [
     "compress",
     "compress_str_utf8",
     "compress_into",
     "compress_utf8_prepend_size",
     "compress_prepend_size",
-    "decompress" "decompress_into",
+    "decompress",
+    "decompress_into",
     "decompress_size_prepended",
-    "decompress_with_dict" "get_maximum_output_size",
+    "decompress_with_dict",
+    "get_maximum_output_size",
 ]
 
 get_maximum_output_size = _block.get_maximum_output_size
@@ -68,7 +68,8 @@ def compress_into(input: bytes, output: bytearray) -> int:
 
 def compress_utf8_prepend_size(input: str) -> bytes:
     """
-    Compress all utf-8 compatible strings of input into output. The uncompressed size will be prepended as a little endian u32.
+    Compress all utf-8 compatible strings of input into output.
+    The uncompressed size will be prepended as a little endian u32.
 
     Args:
         input (`str` that is uft-8 compatible):
@@ -88,8 +89,9 @@ def compress_utf8_prepend_size(input: str) -> bytes:
 
 def compress_prepend_size(input: bytes) -> bytes:
     """
-    Compress the input bytes using LZ4 and prepend the original size as a little-endian u32.
-    This is compatible with `decompress_size_prepended`.
+    Compress the input bytes using LZ4 and prepend the original
+    size as a little-endian u32. This is compatible with
+    `decompress_size_prepended`.
 
     Args
         input : (`bytes`)
@@ -120,7 +122,9 @@ def decompress(input: bytes, min_size: int) -> bytes:
 
 def decompress_into(input: bytes, output: bytearray) -> int:
     """
-    Decompress input bytes into the provided output buffer. The output buffer must be preallocated with enough space for the uncompressed data.
+    Decompress input bytes into the provided output buffer.
+    The output buffer must be preallocated with enough space
+    for the uncompressed data.
 
     Args:
         input (`bytes`):
