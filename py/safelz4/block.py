@@ -41,7 +41,12 @@ def compress_str_utf8(input: str) -> bytes:
     Returns:
         `Tuple[int, bytes]` : size of the compressed, and the block.
     """
-    buffer = input.encode("utf-8")
+    try:
+        buffer = input.encode("utf-8")
+    except UnicodeEncodeError:
+        raise UnicodeEncodeError(
+            f"input {input[:min(len(input), 5)]:>5} is not utf-8 encodable."
+        )
     return _block.compress(buffer)
 
 
@@ -76,12 +81,12 @@ def compress_utf8_prepend_size(input: str) -> bytes:
         buffer = input.encode("utf-8")
         return bytes(_block.compress_prepend_size(buffer))
     except UnicodeEncodeError:
-        raise UnboundLocalError(
+        raise UnicodeEncodeError(
             f"input {input[:min(len(input), 5)]:>5} is not utf-8 encodable."
         )
 
 
-def compress_prepend_size(input: bytes) -> Tuple[int, bytearray]:
+def compress_prepend_size(input: bytes) -> bytes:
     """
     Compress the input bytes using LZ4 and prepend the original size as a little-endian u32.
     This is compatible with `decompress_size_prepended`.
@@ -97,7 +102,7 @@ def compress_prepend_size(input: bytes) -> Tuple[int, bytearray]:
     return _block.compress_prepend_size(input)
 
 
-def decompress(input: bytes, min_size: int):
+def decompress(input: bytes, min_size: int) -> bytes:
     """
     Decompress the input block bytes.
 
