@@ -1,7 +1,7 @@
 use std::{
+    hash::Hasher,
     io::{Read, Write},
     path::PathBuf,
-    hash::Hasher,
 };
 
 use twox_hash::XxHash32;
@@ -39,7 +39,6 @@ const MAGIC_NUMBER_SIZE: usize = 4;
 const MIN_FRAME_INFO_SIZE: usize = 7;
 const MAX_FRAME_INFO_SIZE: usize = 19;
 const BLOCK_INFO_SIZE: usize = 4;
-
 
 ///Block mode for frame compression.
 ///
@@ -155,7 +154,7 @@ impl PyFramInfo {
         block_size: PyBlockSize,
         block_mode: PyBlockMode,
         block_checksums: Option<bool>,
-        dict_id : Option<u32>,
+        dict_id: Option<u32>,
         content_checksum: Option<bool>,
         content_size: Option<u64>,
         legacy_frame: Option<bool>,
@@ -179,10 +178,9 @@ impl PyFramInfo {
     }
 
     #[staticmethod]
-    fn read_size(input : &[u8]) -> PyResult<usize> {
-
+    fn read_size(input: &[u8]) -> PyResult<usize> {
         if input.len() < 5 {
-            return Err(LZ4Exception::new_err("Too small to read magic number."))
+            return Err(LZ4Exception::new_err("Too small to read magic number."));
         }
 
         let mut required = MIN_FRAME_INFO_SIZE;
@@ -212,8 +210,8 @@ impl PyFramInfo {
     }
 
     #[staticmethod]
-    fn read<'py>(mut input : &[u8]) -> PyResult<PyFramInfo> {
-        let original_input = input ;
+    fn read(mut input: &[u8]) -> PyResult<PyFramInfo> {
+        let original_input = input;
         // 4 byte Magic
         let magic_num = {
             let mut buffer = [0u8; 4];
@@ -231,11 +229,15 @@ impl PyFramInfo {
             let mut buffer = [0u8; 4];
             input.read_exact(&mut buffer)?;
             let user_data_len = u32::from_le_bytes(buffer);
-            return Err(LZ4Exception::new_err(format!("Within skipable frames range {user_data_len:?}.")))
+            return Err(LZ4Exception::new_err(format!(
+                "Within skipable frames range {user_data_len:?}."
+            )));
             // return Err(Error::SkippableFrame(user_data_len));
         }
         if magic_num != LZ4F_MAGIC_NUMBER {
-            return Err(LZ4Exception::new_err(format!("Wrong magic number.")))
+            return Err(LZ4Exception::new_err(format!(
+                "Wrong magic number, expected 0x{LZ4F_MAGIC_NUMBER:x}."
+            )));
             // return Err(Error::WrongMagicNumber);
         }
 
@@ -264,7 +266,11 @@ impl PyFramInfo {
         let block_checksums = flg_byte & FLG_BLOCK_CHECKSUMS != 0;
 
         let block_size = match (bd_byte & BD_BLOCK_SIZE_MASK) >> BD_BLOCK_SIZE_MASK_RSHIFT {
-            i @ 0..=3 => return Err(LZ4Exception::new_err(format!("unsuppored block size number {i:?}"))),
+            i @ 0..=3 => {
+                return Err(LZ4Exception::new_err(format!(
+                    "unsuppored block size number {i:?}"
+                )))
+            }
             4 => PyBlockSize::Max64KB,
             5 => PyBlockSize::Max256KB,
             6 => PyBlockSize::Max1MB,
@@ -297,7 +303,9 @@ impl PyFramInfo {
         hasher.write(&original_input[4..original_input.len() - input.len() - 1]);
         let header_hash = (hasher.finish() >> 8) as u8;
         if header_hash != expected_checksum {
-            return Err(LZ4Exception::new_err(format!("Expected checksum {expected_checksum:?}, got {header_hash:?}")))
+            return Err(LZ4Exception::new_err(format!(
+                "Expected checksum {expected_checksum:?}, got {header_hash:?}"
+            )));
         }
 
         Ok(PyFramInfo {
@@ -548,7 +556,7 @@ fn enflate_file(py: Python<'_>, filename: PathBuf) -> PyResult<PyBound<'_, PyByt
 pub(crate) fn register_frame_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let frame_m = PyModule::new(m.py(), "_frame")?;
 
-    // function 
+    // function
     frame_m.add_function(wrap_pyfunction!(deflate, &frame_m)?)?;
     frame_m.add_function(wrap_pyfunction!(deflate_file, &frame_m)?)?;
     frame_m.add_function(wrap_pyfunction!(deflate_file_with_info, &frame_m)?)?;
@@ -575,7 +583,7 @@ pub(crate) fn register_frame_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     frame_m.add("BD_RESERVED_MASK", BD_RESERVED_MASK)?;
     frame_m.add("BD_BLOCK_SIZE_MASK", BD_BLOCK_SIZE_MASK)?;
     frame_m.add("BD_BLOCK_SIZE_MASK_RSHIFT", BD_BLOCK_SIZE_MASK_RSHIFT)?;
-    
+
     frame_m.add("BLOCK_UNCOMPRESSED_SIZE_BIT", BLOCK_UNCOMPRESSED_SIZE_BIT)?;
 
     frame_m.add("LZ4F_MAGIC_NUMBER", LZ4F_MAGIC_NUMBER)?;
@@ -585,12 +593,10 @@ pub(crate) fn register_frame_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     frame_m.add("MIN_FRAME_INFO_SIZE", MIN_FRAME_INFO_SIZE)?;
     frame_m.add("MAX_FRAME_INFO_SIZE", MAX_FRAME_INFO_SIZE)?;
     frame_m.add("BLOCK_INFO_SIZE", BLOCK_INFO_SIZE)?;
-    
 
     m.add_submodule(&frame_m)?;
     Ok(())
 }
-
 
 /*
 
