@@ -61,9 +61,9 @@ fn compress_prepend_size<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound
 #[pyfunction]
 #[pyo3(signature = (input, output))]
 fn compress_into(input: &[u8], output: PyBound<'_, PyByteArray>) -> PyResult<usize> {
-    let out = unsafe { output.as_bytes_mut() };
-    let size =
-        lz4_flex::compress_into(input, out).map_err(|e| LZ4Exception::new_err(format!("{e}")))?;
+    let buffer = unsafe { output.as_bytes_mut() };
+    let size = lz4_flex::compress_into(input, buffer)
+        .map_err(|e| LZ4Exception::new_err(format!("{e}")))?;
 
     Ok(size)
 }
@@ -99,9 +99,9 @@ fn compress_with_dict<'py>(
 #[pyfunction]
 #[pyo3(signature = (input, output))]
 fn decompress_into(input: &[u8], output: PyBound<'_, PyByteArray>) -> PyResult<usize> {
-    let output_ref = unsafe { output.as_bytes_mut() };
+    let buffer = unsafe { output.as_bytes_mut() };
 
-    let size = lz4_flex::decompress_into(input, output_ref)
+    let size = lz4_flex::decompress_into(input, buffer)
         .map_err(|e| LZ4Exception::new_err(format!("decompression error {e:?}")))?;
     Ok(size)
 }
@@ -179,6 +179,7 @@ fn decompress_with_dict<'py>(
 /// ```
 pub(crate) fn register_block_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let block_m = PyModule::new(m.py(), "_block")?;
+
     block_m.add_function(wrap_pyfunction!(compress, &block_m)?)?;
     block_m.add_function(wrap_pyfunction!(compress_into, &block_m)?)?;
     block_m.add_function(wrap_pyfunction!(compress_prepend_size, &block_m)?)?;
