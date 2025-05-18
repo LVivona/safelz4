@@ -1,7 +1,10 @@
 use std::{
     io::{Read, Write},
     path::PathBuf,
+    hash::Hasher,
 };
+
+use twox_hash::XxHash32;
 
 use pyo3::exceptions::{PyFileExistsError, PyIOError};
 use pyo3::prelude::*;
@@ -9,6 +12,34 @@ use pyo3::types::PyBytes;
 use pyo3::Bound as PyBound;
 
 use lz4_flex::frame::{BlockMode, BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
+
+use crate::error::LZ4Exception;
+
+const FLG_RESERVED_MASK: u8 = 0b00000010;
+const FLG_VERSION_MASK: u8 = 0b11000000;
+const FLG_SUPPORTED_VERSION_BITS: u8 = 0b01000000;
+
+const FLG_INDEPENDENT_BLOCKS: u8 = 0b00100000;
+const FLG_BLOCK_CHECKSUMS: u8 = 0b00010000;
+const FLG_CONTENT_SIZE: u8 = 0b00001000;
+const FLG_CONTENT_CHECKSUM: u8 = 0b00000100;
+const FLG_DICTIONARY_ID: u8 = 0b00000001;
+
+const BD_RESERVED_MASK: u8 = !BD_BLOCK_SIZE_MASK;
+const BD_BLOCK_SIZE_MASK: u8 = 0b01110000;
+const BD_BLOCK_SIZE_MASK_RSHIFT: u8 = 4;
+
+const BLOCK_UNCOMPRESSED_SIZE_BIT: u32 = 0x80000000;
+
+const LZ4F_MAGIC_NUMBER: u32 = 0x184D2204;
+const LZ4F_LEGACY_MAGIC_NUMBER: u32 = 0x184C2102;
+const LZ4F_SKIPPABLE_MAGIC_RANGE: std::ops::RangeInclusive<u32> = 0x184D2A50..=0x184D2A5F;
+
+const MAGIC_NUMBER_SIZE: usize = 4;
+const MIN_FRAME_INFO_SIZE: usize = 7;
+const MAX_FRAME_INFO_SIZE: usize = 19;
+const BLOCK_INFO_SIZE: usize = 4;
+
 
 ///Block mode for frame compression.
 ///
@@ -32,7 +63,7 @@ impl From<PyBlockMode> for BlockMode {
     }
 }
 
-///    Block size for frame compression.
+/// Block size for frame compression.
 /// Attributes:
 ///     Auto: Will detect optimal frame size based on the size of the first write call.
 ///     Max64KB: The default block size (64KB).
@@ -88,6 +119,13 @@ struct PyFramInfo {
     pub block_size: PyBlockSize,
     /// The block mode.
     pub block_mode: PyBlockMode,
+    /// The identifier for the dictionary that must be used to correctly decode data.
+    /// The compressor and the decompressor must use exactly the same dictionary.
+    ///
+    /// Note that this is currently unsupported and for this reason it's not pub.
+    #[allow(dead_code)]
+    pub(crate) dict_id: Option<u32>,
+
     /// If set, includes a checksum for each data block in the frame.
     pub block_checksums: bool,
     /// If set, includes a content checksum to verify that the full frame contents have been
@@ -112,11 +150,12 @@ impl From<PyFramInfo> for FrameInfo {
 #[pymethods]
 impl PyFramInfo {
     #[new]
-    #[pyo3(signature = (block_size, block_mode, block_checksums = None, content_checksum = None, content_size = None, legacy_frame = None))]
+    #[pyo3(signature = (block_size, block_mode, block_checksums = None, dict_id = None, content_checksum = None, content_size = None, legacy_frame = None))]
     fn new(
         block_size: PyBlockSize,
         block_mode: PyBlockMode,
         block_checksums: Option<bool>,
+        dict_id : Option<u32>,
         content_checksum: Option<bool>,
         content_size: Option<u64>,
         legacy_frame: Option<bool>,
@@ -125,6 +164,7 @@ impl PyFramInfo {
             block_mode,
             block_size,
             content_size,
+            dict_id,
             block_checksums: block_checksums.unwrap_or_default(),
             content_checksum: content_checksum.unwrap_or_default(),
             legacy_frame: legacy_frame.unwrap_or_default(),
@@ -136,6 +176,139 @@ impl PyFramInfo {
         Self {
             ..Default::default()
         }
+    }
+
+    #[staticmethod]
+    fn read_size(input : &[u8]) -> PyResult<usize> {
+
+        if input.len() < 5 {
+            return Err(LZ4Exception::new_err("Too small to read magic number."))
+        }
+
+        let mut required = MIN_FRAME_INFO_SIZE;
+        let magic_num = u32::from_le_bytes(input[0..4].try_into().unwrap());
+        if magic_num == LZ4F_LEGACY_MAGIC_NUMBER {
+            return Ok(MAGIC_NUMBER_SIZE);
+        }
+
+        if input.len() < required {
+            return Ok(required);
+        }
+
+        if LZ4F_SKIPPABLE_MAGIC_RANGE.contains(&magic_num) {
+            return Ok(8);
+        }
+        if magic_num != LZ4F_MAGIC_NUMBER {
+            return Err(LZ4Exception::new_err("Unexpected magic number."));
+        }
+
+        if input[4] & FLG_CONTENT_SIZE != 0 {
+            required += 8;
+        }
+        if input[4] & FLG_DICTIONARY_ID != 0 {
+            required += 4
+        }
+        Ok(required)
+    }
+
+    #[staticmethod]
+    fn read<'py>(mut input : &[u8]) -> PyResult<PyFramInfo> {
+        let original_input = input ;
+        // 4 byte Magic
+        let magic_num = {
+            let mut buffer = [0u8; 4];
+            input.read_exact(&mut buffer)?;
+            u32::from_le_bytes(buffer)
+        };
+        if magic_num == LZ4F_LEGACY_MAGIC_NUMBER {
+            return Ok(PyFramInfo {
+                block_size: PyBlockSize::Max8MB,
+                legacy_frame: true,
+                ..Default::default()
+            });
+        }
+        if LZ4F_SKIPPABLE_MAGIC_RANGE.contains(&magic_num) {
+            let mut buffer = [0u8; 4];
+            input.read_exact(&mut buffer)?;
+            let user_data_len = u32::from_le_bytes(buffer);
+            return Err(LZ4Exception::new_err(format!("Within skipable frames range {user_data_len:?}.")))
+            // return Err(Error::SkippableFrame(user_data_len));
+        }
+        if magic_num != LZ4F_MAGIC_NUMBER {
+            return Err(LZ4Exception::new_err(format!("Wrong magic number.")))
+            // return Err(Error::WrongMagicNumber);
+        }
+
+        // fixed size section
+        let [flg_byte, bd_byte] = {
+            let mut buffer = [0u8, 0];
+            input.read_exact(&mut buffer)?;
+            buffer
+        };
+
+        if flg_byte & FLG_VERSION_MASK != FLG_SUPPORTED_VERSION_BITS {
+            // version is always 01
+            // return Err(Error::UnsupportedVersion(flg_byte & FLG_VERSION_MASK));
+        }
+
+        if flg_byte & FLG_RESERVED_MASK != 0 || bd_byte & BD_RESERVED_MASK != 0 {
+            // return Err(Error::ReservedBitsSet);
+        }
+
+        let block_mode = if flg_byte & FLG_INDEPENDENT_BLOCKS != 0 {
+            PyBlockMode::Independent
+        } else {
+            PyBlockMode::Linked
+        };
+        let content_checksum = flg_byte & FLG_CONTENT_CHECKSUM != 0;
+        let block_checksums = flg_byte & FLG_BLOCK_CHECKSUMS != 0;
+
+        let block_size = match (bd_byte & BD_BLOCK_SIZE_MASK) >> BD_BLOCK_SIZE_MASK_RSHIFT {
+            i @ 0..=3 => return Err(LZ4Exception::new_err(format!("unsuppored block size number {i:?}"))),
+            4 => PyBlockSize::Max64KB,
+            5 => PyBlockSize::Max256KB,
+            6 => PyBlockSize::Max1MB,
+            7 => PyBlockSize::Max4MB,
+            _ => unreachable!(),
+        };
+
+        // var len section
+        let mut content_size = None;
+        if flg_byte & FLG_CONTENT_SIZE != 0 {
+            let mut buffer = [0u8; 8];
+            input.read_exact(&mut buffer).unwrap();
+            content_size = Some(u64::from_le_bytes(buffer));
+        }
+
+        let mut dict_id = None;
+        if flg_byte & FLG_DICTIONARY_ID != 0 {
+            let mut buffer = [0u8; 4];
+            input.read_exact(&mut buffer)?;
+            dict_id = Some(u32::from_le_bytes(buffer));
+        }
+
+        // 1 byte header checksum
+        let expected_checksum = {
+            let mut buffer = [0u8; 1];
+            input.read_exact(&mut buffer)?;
+            buffer[0]
+        };
+        let mut hasher = XxHash32::with_seed(0);
+        hasher.write(&original_input[4..original_input.len() - input.len() - 1]);
+        let header_hash = (hasher.finish() >> 8) as u8;
+        if header_hash != expected_checksum {
+            return Err(LZ4Exception::new_err(format!("Expected checksum {expected_checksum:?}, got {header_hash:?}")))
+        }
+
+        Ok(PyFramInfo {
+            content_size,
+            block_size,
+            block_mode,
+            dict_id,
+            block_checksums,
+            content_checksum,
+            legacy_frame: false,
+        })
     }
 
     #[getter]
@@ -156,6 +329,18 @@ impl PyFramInfo {
     #[getter]
     fn get_content_sum(&self) -> PyResult<bool> {
         Ok(self.content_checksum)
+    }
+
+    #[setter(block_mode)]
+    fn set_block_mode(&mut self, value: PyBlockMode) -> PyResult<()> {
+        self.block_mode = value;
+        Ok(())
+    }
+
+    #[setter(block_size)]
+    fn set_block_size(&mut self, value: PyBlockSize) -> PyResult<()> {
+        self.block_size = value;
+        Ok(())
     }
 
     #[setter(block_checksums)]
@@ -363,6 +548,7 @@ fn enflate_file(py: Python<'_>, filename: PathBuf) -> PyResult<PyBound<'_, PyByt
 pub(crate) fn register_frame_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let frame_m = PyModule::new(m.py(), "_frame")?;
 
+    // function 
     frame_m.add_function(wrap_pyfunction!(deflate, &frame_m)?)?;
     frame_m.add_function(wrap_pyfunction!(deflate_file, &frame_m)?)?;
     frame_m.add_function(wrap_pyfunction!(deflate_file_with_info, &frame_m)?)?;
@@ -370,10 +556,66 @@ pub(crate) fn register_frame_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     frame_m.add_function(wrap_pyfunction!(enflate_file, &frame_m)?)?;
     frame_m.add_function(wrap_pyfunction!(enflate, &frame_m)?)?;
 
+    // class objects
     frame_m.add_class::<PyFramInfo>()?;
     frame_m.add_class::<PyBlockMode>()?;
     frame_m.add_class::<PyBlockSize>()?;
 
+    // const number for reading frame blocks
+    frame_m.add("FLG_RESERVED_MASK", FLG_RESERVED_MASK)?;
+    frame_m.add("FLG_VERSION_MASK", FLG_VERSION_MASK)?;
+    frame_m.add("FLG_SUPPORTED_VERSION_BITS", FLG_SUPPORTED_VERSION_BITS)?;
+
+    frame_m.add("FLG_INDEPENDENT_BLOCKS", FLG_INDEPENDENT_BLOCKS)?;
+    frame_m.add("FLG_BLOCK_CHECKSUMS", FLG_BLOCK_CHECKSUMS)?;
+    frame_m.add("FLG_CONTENT_SIZE", FLG_CONTENT_SIZE)?;
+    frame_m.add("FLG_CONTENT_CHECKSUM", FLG_CONTENT_CHECKSUM)?;
+    frame_m.add("FLG_DICTIONARY_ID", FLG_DICTIONARY_ID)?;
+
+    frame_m.add("BD_RESERVED_MASK", BD_RESERVED_MASK)?;
+    frame_m.add("BD_BLOCK_SIZE_MASK", BD_BLOCK_SIZE_MASK)?;
+    frame_m.add("BD_BLOCK_SIZE_MASK_RSHIFT", BD_BLOCK_SIZE_MASK_RSHIFT)?;
+    
+    frame_m.add("BLOCK_UNCOMPRESSED_SIZE_BIT", BLOCK_UNCOMPRESSED_SIZE_BIT)?;
+
+    frame_m.add("LZ4F_MAGIC_NUMBER", LZ4F_MAGIC_NUMBER)?;
+    frame_m.add("LZ4F_LEGACY_MAGIC_NUMBER", LZ4F_LEGACY_MAGIC_NUMBER)?;
+
+    frame_m.add("MAGIC_NUMBER_SIZE", MAGIC_NUMBER_SIZE)?;
+    frame_m.add("MIN_FRAME_INFO_SIZE", MIN_FRAME_INFO_SIZE)?;
+    frame_m.add("MAX_FRAME_INFO_SIZE", MAX_FRAME_INFO_SIZE)?;
+    frame_m.add("BLOCK_INFO_SIZE", BLOCK_INFO_SIZE)?;
+    
+
     m.add_submodule(&frame_m)?;
     Ok(())
 }
+
+
+/*
+
+const FLG_RESERVED_MASK: u8 = 0b00000010;
+const FLG_VERSION_MASK: u8 = 0b11000000;
+const FLG_SUPPORTED_VERSION_BITS: u8 = 0b01000000;
+
+const FLG_INDEPENDENT_BLOCKS: u8 = 0b00100000;
+const FLG_BLOCK_CHECKSUMS: u8 = 0b00010000;
+const FLG_CONTENT_SIZE: u8 = 0b00001000;
+const FLG_CONTENT_CHECKSUM: u8 = 0b00000100;
+const FLG_DICTIONARY_ID: u8 = 0b00000001;
+
+const BD_RESERVED_MASK: u8 = !BD_BLOCK_SIZE_MASK;
+const BD_BLOCK_SIZE_MASK: u8 = 0b01110000;
+const BD_BLOCK_SIZE_MASK_RSHIFT: u8 = 4;
+
+const BLOCK_UNCOMPRESSED_SIZE_BIT: u32 = 0x80000000;
+
+const LZ4F_MAGIC_NUMBER: u32 = 0x184D2204;
+const LZ4F_LEGACY_MAGIC_NUMBER: u32 = 0x184C2102;
+const LZ4F_SKIPPABLE_MAGIC_RANGE: std::ops::RangeInclusive<u32> = 0x184D2A50..=0x184D2A5F;
+
+const MAGIC_NUMBER_SIZE: usize = 4;
+const MIN_FRAME_INFO_SIZE: usize = 7;
+const MAX_FRAME_INFO_SIZE: usize = 19;
+const BLOCK_INFO_SIZE: usize = 4;
+ */
