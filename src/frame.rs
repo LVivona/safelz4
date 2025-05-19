@@ -46,7 +46,7 @@ const BLOCK_INFO_SIZE: usize = 4;
 ///    Independent: Independent block mode.
 ///    Linked: Linked block mode.
 #[pyclass(eq, eq_int, name = "BlockMode")]
-#[derive(Default, Debug, PartialEq, Clone)]
+#[derive(Default, Debug, Eq, PartialEq, Clone)]
 enum PyBlockMode {
     #[default]
     Independent,
@@ -71,7 +71,7 @@ impl From<PyBlockMode> for BlockMode {
 ///     Max4MB: 4MB block size.
 ///     Max8MB: 8MB block size.
 #[pyclass(name = "BlockSize")]
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 enum PyBlockSize {
     /// Will detect optimal frame size based on the size of the first write call
     #[default]
@@ -109,8 +109,8 @@ impl From<PyBlockSize> for BlockSize {
 ///     block_checksums: If set, includes a checksum for each data block in the frame.
 ///     content_checksum: If set, includes a content checksum to verify that the full frame contents have been decoded correctly.
 ///     legacy_frame: If set, use the legacy frame format.
-#[derive(Default, Debug, Clone)]
-#[pyclass(name = "FrameInfo", subclass)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[pyclass(name = "FrameInfo", subclass, eq)]
 struct PyFramInfo {
     /// If set, includes the total uncompressed size of data in the frame.
     pub content_size: Option<u64>,
