@@ -53,7 +53,7 @@ class FrameInfo:
     block_size: BlockSize
     block_mode: BlockMode
     block_checksums: bool
-    dict_id : Optional[int]
+    dict_id: Optional[int]
     content_checksum: bool
     legacy_frame: bool
     def __new__(
@@ -61,7 +61,7 @@ class FrameInfo:
         block_size: BlockSize,
         block_mode: BlockMode,
         block_checksums: Optional[bool] = None,
-        dict_id : Optional[int] = None,
+        dict_id: Optional[int] = None,
         content_checksum: Optional[bool] = None,
         content_size: Optional[int] = None,
         legacy_frame: Optional[bool] = None,
@@ -69,7 +69,7 @@ class FrameInfo:
     @staticmethod
     def default() -> Self: ...
     @staticmethod
-    def read(input : bytes) -> Self: ...
+    def read(input: bytes) -> Self: ...
     @property
     def block_checksums(self) -> bool: ...
     @block_checksums.setter

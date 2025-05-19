@@ -16,6 +16,7 @@ pwd = os.path.dirname(os.path.abspath(__file__))
 samples = os.path.join(pwd, "..", "benches", "samples")
 FILE_1Kb = os.path.join(samples, "compression_1k.txt")
 
+
 def test_empty_block_compression():
     output = compress(b"")
     assert output == b"\x00"
@@ -75,6 +76,7 @@ def test_compression_into():
         assert reduc <= 1.0
         assert max_size >= len(output)
 
+
 def test_compress_prepend_size():
     with open(FILE_1Kb, "r") as f:
         stdin = f.read(-1).encode("utf-8")
@@ -87,6 +89,7 @@ def test_compress_prepend_size():
         assert reduc <= 1.0
         assert max_size >= len(output)
 
+
 # # ..End of Compression..
 
 
@@ -98,18 +101,18 @@ def test_regular_decompression_empty():
     assert buffer == empty_string
 
 
-def test_regular_decompression(): 
-    
+def test_regular_decompression():
+
     with open(FILE_1Kb, "r") as file:
         stream_f = file.read(-1).encode("utf-8")
-        
+
         cbuffer_f = compress(stream_f)
-        
+
         output = decompress(cbuffer_f, len(stream_f))
         assert stream_f == output
 
-    
-def test_decompress_into(): 
+
+def test_decompress_into():
     with open(FILE_1Kb, "r") as file:
         stream_f = file.read(-1).encode("utf-8")
 
@@ -121,10 +124,9 @@ def test_decompress_into():
         assert output == stream_f
 
 
-def test_decompress_size_prepended(): 
-        with open(FILE_1Kb, "r") as file:
-            stream_f = file.read(-1).encode("utf-8")
-            cbuffer = compress_prepend_size(stream_f)
-            output  = decompress_size_prepended(cbuffer)
-            assert output == stream_f
-
+def test_decompress_size_prepended():
+    with open(FILE_1Kb, "r") as file:
+        stream_f = file.read(-1).encode("utf-8")
+        cbuffer = compress_prepend_size(stream_f)
+        output = decompress_size_prepended(cbuffer)
+        assert output == stream_f
