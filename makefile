@@ -1,4 +1,4 @@
-.PHONY: help clean test lint lint-check format format-dir
+.PHONY: help clean test lint lint-check format format-dir fuzz
 
 # Define default Python and pip executables
 PYTHON ?= python
@@ -15,7 +15,8 @@ help:
 	@echo "  help      - Show this help message"
 	@echo "  clean     - Remove build artifacts and cache files"
 	@echo "  test      - Run all tests"
-	@echo "  flake     - Run flake8 lint checking on source files"
+	@echo "  flake     - Run flake8 lint checking on source files (ignore: E302,E704,E301)"
+	@echo "  fuzz	   - Run current fuzz target tests. e.g make fuzz TARGET=fuzz_roundtrip"
 	@echo "  lint      - Run Black lint check on all source files"
 	@echo "  check     - Run Black lint check without modifying files"
 	@echo "  format    - Format all source files with Black"
@@ -32,6 +33,8 @@ test:
 
 flake:
 	flake8 py/safelz4/ -v --max-line-length 80
+	flake8 py/safelz4/_frame/__init__.pyi -v --max-line-length 80 --ignore=E302,E704,E301
+	flake8 py/safelz4/_block/__init__.pyi -v --max-line-length 80 --ignore=E302,E704,E301
 
 lint: 
 	$(BLACK) $(BLACK_OPTS) $(SRC_DIRS)
@@ -51,6 +54,14 @@ format-dir:
 		exit 1; \
 	fi
 	$(BLACK) $(BLACK_OPTS) "$(DIR)"
+
+fuzz:
+	@if [ -z "$(TARGET)" ]; then \
+		echo "Error: TARGET parameter is required. Usage: make fuzz TARGET=fuzz_target_name"; \
+		exit 1; \
+	else \
+		$(PYTHON) fuzz/$(TARGET).py; \
+	fi
 
 # Install development dependencies
 install-dev:
