@@ -93,6 +93,38 @@ class FrameInfo:
     def __str__(self) -> str: ...
     def __repr__(self) -> str: ...
 
+class open_frame:
+    """
+    Context manager that allows us to decompresses a buffer of bytes using thex LZ4 frame format.
+
+    Example:
+    ```
+    output = None
+    with open_frame("datafile") as f:
+        output = f.decompress()
+        
+    print(output)
+    ```
+    """
+    def __new__(self, filename: Union[str, os.PathLike]) -> None:...
+    def info(self) -> FrameInfo:
+        """
+        Return the frameinfo of the compression file
+
+        Returns:
+            `FrameInfo`: The freeform FrameInfo.
+        """
+        ...
+    def decompress(self) -> bytes:
+        """
+        Decompress the whole frame file
+
+        Returns:
+            `bytes`: 
+                The decompressed (original) representation of the bytes within the file.
+        """
+        ...
+
 def enflate(input: bytes) -> bytes:
     """
     Decompresses a buffer of bytes using thex LZ4 frame format.

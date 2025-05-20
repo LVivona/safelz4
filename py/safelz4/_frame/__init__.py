@@ -6,6 +6,8 @@ BlockMode = _frame.BlockMode
 BlockSize = _frame.BlockSize
 FrameInfo = _frame.FrameInfo
 
+open_frame = _frame.open_frame
+
 deflate = _frame.deflate
 deflate_file = _frame.deflate_file
 deflate_file_with_info = _frame.deflate_file_with_info

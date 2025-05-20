@@ -6,6 +6,8 @@ use std::{
 
 use twox_hash::XxHash32;
 
+use memmap2::{Mmap, MmapOptions};
+
 use pyo3::exceptions::{PyFileExistsError, PyIOError};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -211,6 +213,8 @@ impl PyFramInfo {
 
     #[staticmethod]
     fn read(mut input: &[u8]) -> PyResult<PyFramInfo> {
+        // 4 (magic number) + 2 (flag bytes) + 1 ()
+
         let original_input = input;
         // 4 byte Magic
         let magic_num = {
@@ -232,13 +236,11 @@ impl PyFramInfo {
             return Err(LZ4Exception::new_err(format!(
                 "Within skipable frames range {user_data_len:?}."
             )));
-            // return Err(Error::SkippableFrame(user_data_len));
         }
         if magic_num != LZ4F_MAGIC_NUMBER {
             return Err(LZ4Exception::new_err(format!(
                 "Wrong magic number, expected 0x{LZ4F_MAGIC_NUMBER:x}."
             )));
-            // return Err(Error::WrongMagicNumber);
         }
 
         // fixed size section
@@ -251,10 +253,12 @@ impl PyFramInfo {
         if flg_byte & FLG_VERSION_MASK != FLG_SUPPORTED_VERSION_BITS {
             // version is always 01
             // return Err(Error::UnsupportedVersion(flg_byte & FLG_VERSION_MASK));
+            return Err(LZ4Exception::new_err("unsupported version"))
         }
 
         if flg_byte & FLG_RESERVED_MASK != 0 || bd_byte & BD_RESERVED_MASK != 0 {
             // return Err(Error::ReservedBitsSet);
+            return Err(LZ4Exception::new_err("flag bytes reserved bit are not supported"))
         }
 
         let block_mode = if flg_byte & FLG_INDEPENDENT_BLOCKS != 0 {
@@ -544,6 +548,97 @@ fn enflate_file(py: Python<'_>, filename: PathBuf) -> PyResult<PyBound<'_, PyByt
     Ok(PyBytes::new(py, &buffer))
 }
 
+
+#[derive(Debug)]
+struct Open {
+    buffer  : Mmap,
+    info    : Option<PyFramInfo>,
+    offset  : usize
+}
+
+impl Open {
+
+    pub(crate) fn new(filename : PathBuf) -> PyResult<Self> {
+        let file = std::fs::File::open(filename)?;
+
+        let buffer = unsafe { MmapOptions::new().map_copy_read_only(&file)? };
+        let info = Some(PyFramInfo::read(&buffer)?);
+        let offset = PyFramInfo::read_size(&buffer)?;
+
+        Ok(Self {
+            buffer,
+            info,
+            offset
+        })
+    }
+
+    pub(crate) fn info(&self) -> Option<PyFramInfo> {
+        self.info.clone()
+    }
+
+    pub(crate) fn decompress<'py>(&self, py : Python<'py>) -> PyResult<PyBound<'py, PyBytes>> {
+        if let Some(_) = self.info() {
+            enflate(py, &self.buffer)
+        } else {
+            Err(LZ4Exception::new_err("File failed to decompress frame."))
+        }
+    }
+ }
+
+#[pyclass]
+#[allow(non_camel_case_types)]
+struct open_frame {
+    inner: Option<Open>,
+}
+
+
+impl open_frame {
+    pub(crate) fn inner(&self) -> PyResult<&Open> {
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| LZ4Exception::new_err("File is closed".to_string()))?;
+        Ok(inner)
+    }
+}
+
+#[pymethods]
+impl open_frame {
+
+    #[new]
+    #[pyo3(signature = (filename))]
+    fn new(filename: PathBuf) -> PyResult<Self> {
+        let inner = Some(Open::new(filename)?);
+        Ok(Self { inner })
+    }
+
+    /// Return the frameinfo of the compression file
+    ///
+    /// Returns:
+    ///     `FrameInfo`:
+    ///         The freeform FrameInfo.
+    pub fn info(&self) -> PyResult<Option<PyFramInfo>> {
+        Ok(self.inner()?.info())
+    }
+
+    pub fn decompress<'py>(&self, py : Python<'py>) -> PyResult<PyBound<'py, PyBytes>>{
+        self.inner()?.decompress(py)  
+    }
+
+     /// Start the context manager
+     pub fn __enter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    /// Exits the context manager
+    pub fn __exit__(&mut self, _exc_type: PyObject, _exc_value: PyObject, _traceback: PyObject) {
+        self.inner = None;
+    }
+}
+
+
+
+
 /// register frame module handles which handles Frame de/compression of frames.
 ///
 /// ```ignore
@@ -568,6 +663,7 @@ pub(crate) fn register_frame_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     frame_m.add_class::<PyFramInfo>()?;
     frame_m.add_class::<PyBlockMode>()?;
     frame_m.add_class::<PyBlockSize>()?;
+    frame_m.add_class::<open_frame>()?;
 
     // const number for reading frame blocks
     frame_m.add("FLG_RESERVED_MASK", FLG_RESERVED_MASK)?;
@@ -597,31 +693,3 @@ pub(crate) fn register_frame_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_submodule(&frame_m)?;
     Ok(())
 }
-
-/*
-
-const FLG_RESERVED_MASK: u8 = 0b00000010;
-const FLG_VERSION_MASK: u8 = 0b11000000;
-const FLG_SUPPORTED_VERSION_BITS: u8 = 0b01000000;
-
-const FLG_INDEPENDENT_BLOCKS: u8 = 0b00100000;
-const FLG_BLOCK_CHECKSUMS: u8 = 0b00010000;
-const FLG_CONTENT_SIZE: u8 = 0b00001000;
-const FLG_CONTENT_CHECKSUM: u8 = 0b00000100;
-const FLG_DICTIONARY_ID: u8 = 0b00000001;
-
-const BD_RESERVED_MASK: u8 = !BD_BLOCK_SIZE_MASK;
-const BD_BLOCK_SIZE_MASK: u8 = 0b01110000;
-const BD_BLOCK_SIZE_MASK_RSHIFT: u8 = 4;
-
-const BLOCK_UNCOMPRESSED_SIZE_BIT: u32 = 0x80000000;
-
-const LZ4F_MAGIC_NUMBER: u32 = 0x184D2204;
-const LZ4F_LEGACY_MAGIC_NUMBER: u32 = 0x184C2102;
-const LZ4F_SKIPPABLE_MAGIC_RANGE: std::ops::RangeInclusive<u32> = 0x184D2A50..=0x184D2A5F;
-
-const MAGIC_NUMBER_SIZE: usize = 4;
-const MIN_FRAME_INFO_SIZE: usize = 7;
-const MAX_FRAME_INFO_SIZE: usize = 19;
-const BLOCK_INFO_SIZE: usize = 4;
- */

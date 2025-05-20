@@ -2,7 +2,7 @@ from ._safelz4_rs import __version__, error
 import safelz4.block as block
 import safelz4.frame as frame
 from safelz4.frame import deflate, enflate, enflate_file, deflate_file
-from safelz4._frame import BlockMode, BlockSize, FrameInfo
+from safelz4._frame import BlockMode, BlockSize, FrameInfo, open_frame
 
 LZ4Exception = error.LZ4Exception
 
@@ -18,4 +18,5 @@ __all__ = [
     "enflate",
     "enflate_file",
     "deflate_file",
+    "open_frame",
 ]
