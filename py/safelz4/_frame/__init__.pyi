@@ -1,5 +1,5 @@
 import os
-from typing import Optional, Union
+from typing import Optional, Union, Any
 from typing_extensions import Self
 
 from enum import IntEnum, Enum
@@ -21,7 +21,8 @@ class BlockSize(IntEnum):
     Block size for frame compression.
 
     Attributes:
-        Auto: Will detect optimal frame size based on the size of the first write call.
+        Auto: Will detect optimal frame size based on the size of the first
+        write call.
         Max64KB: The default block size (64KB).
         Max256KB: 256KB block size.
         Max1MB: 1MB block size.
@@ -41,11 +42,14 @@ class FrameInfo:
     Information about a compression frame.
 
     Attributes:
-        content_size: If set, includes the total uncompressed size of data in the frame.
+        content_size: If set, includes the total uncompressed size of data in
+                      the frame.
         block_size: The maximum uncompressed size of each data block.
         block_mode: The block mode.
-        block_checksums: If set, includes a checksum for each data block in the frame.
-        content_checksum: If set, includes a content checksum to verify that the full frame contents have been decoded correctly.
+        block_checksums: If set, includes a checksum for each data block in the
+        frame.
+        content_checksum: If set, includes a content checksum to verify that the
+          full frame contents have been decoded correctly.
         legacy_frame: If set, use the legacy frame format.
     """
 
@@ -56,6 +60,7 @@ class FrameInfo:
     dict_id: Optional[int]
     content_checksum: bool
     legacy_frame: bool
+
     def __new__(
         self,
         block_size: BlockSize,
@@ -65,7 +70,7 @@ class FrameInfo:
         content_checksum: Optional[bool] = None,
         content_size: Optional[int] = None,
         legacy_frame: Optional[bool] = None,
-    ) -> None: ...
+    ) -> "FrameInfo": ...
     @staticmethod
     def default() -> Self: ...
     @staticmethod
@@ -95,34 +100,52 @@ class FrameInfo:
 
 class open_frame:
     """
-    Context manager that allows us to decompresses a buffer of bytes using thex LZ4 frame format.
+    Context manager that allows us to decompresses a buffer of bytes using thex
+    LZ4 frame format.
 
     Example:
     ```
     output = None
     with open_frame("datafile") as f:
         output = f.decompress()
-        
+
     print(output)
     ```
     """
-    def __new__(self, filename: Union[str, os.PathLike]) -> None:...
+
+    def __new__(self, filename: Union[str, os.PathLike]) -> "open_frame":
+        """Initialize the open_frame context manager with a filename."""
+        ...
     def info(self) -> FrameInfo:
         """
-        Return the frameinfo of the compression file
-
+        Return the frameinfo of the compression file.
         Returns:
-            `FrameInfo`: The freeform FrameInfo.
+            `FrameInfo`:
+                The freeform FrameInfo.
         """
         ...
     def decompress(self) -> bytes:
         """
-        Decompress the whole frame file
-
+        Decompress the whole frame file.
         Returns:
-            `bytes`: 
-                The decompressed (original) representation of the bytes within the file.
+            `bytes`:
+                The decompressed (original) representation of the bytes
+                within the file.
         """
+        ...
+    def content_size(self) -> Optional[int]:
+        """Return the content size if available in the frame header."""
+        ...
+    def __enter__(self) -> "open_frame":
+        """Enter the context manager and return self."""
+        ...
+    def __exit__(
+        self,
+        exc_type: Optional[type],
+        exc_val: Optional[Exception],
+        exc_tb: Optional[Any],
+    ) -> None:
+        """Exit the context manager and clean up resources."""
         ...
 
 def enflate(input: bytes) -> bytes:
@@ -189,7 +212,8 @@ def deflate_file_with_info(
     info: Optional[FrameInfo] = None,
 ) -> None:
     """
-    Compresses a buffer of bytes into a file using using the LZ4 frame format, with more control on Frame.
+    Compresses a buffer of bytes into a file using using the LZ4 frame format,
+    with more control on Frame.
 
     Args:
         filename (`str`, or `os.PathLike`):
@@ -209,7 +233,8 @@ def deflate_with_info(
     info: Optional[FrameInfo] = None,
 ) -> None:
     """
-    Compresses a buffer of bytes into byte buffer using using the LZ4 frame format, with more control on Frame.
+    Compresses a buffer of bytes into byte buffer using using the LZ4 frame
+    format, with more control on Frame.
 
     Args:
         input (`bytes`):

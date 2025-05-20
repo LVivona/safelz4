@@ -13,7 +13,8 @@ def compress(input: bytes) -> bytes:
 
 def compress_prepend_size(input: bytes) -> bytes:
     """
-    Compress the input bytes using LZ4 and prepend the original size as a little-endian u32.
+    Compress the input bytes using LZ4 and prepend the original size as
+    a little-endian u32.
 
     This is compatible with `decompress_size_prepended`.
 
@@ -28,7 +29,8 @@ def compress_prepend_size(input: bytes) -> bytes:
 
 def compress_into(input: bytes, output: bytearray) -> int:
     """
-    Compress the input bytes into the provided output buffer. The output buffer must be preallocated with a size obtained from `get_maximum_output_size`.
+    Compress the input bytes into the provided output buffer. The output buffer
+    must be preallocated with a size obtained from `get_maximum_output_size`.
 
     Args:
         input (`bytes`):
@@ -73,7 +75,9 @@ def decompress(input: bytes, min_size: int) -> int:
 
 def decompress_into(input: bytes, output: bytearray) -> int:
     """
-    Decompress input bytes into the provided output buffer. The output buffer must be preallocated with enough space for the uncompressed data.
+    Decompress input bytes into the provided output buffer.
+    The output buffer must be preallocated with enough space
+    for the uncompressed data.
 
     Args:
         input (`bytes`):
@@ -88,8 +92,8 @@ def decompress_into(input: bytes, output: bytearray) -> int:
 
 def decompress_size_prepended(input: bytes) -> bytes:
     """
-    Decompress input bytes that were compressed with the original size prepended.
-    Compatible with `compress_prepend_size`.
+    Decompress input bytes that were compressed with the original
+    size prepended. Compatible with `compress_prepend_size`.
 
     Args:
         input (`bytes`):
@@ -102,7 +106,8 @@ def decompress_size_prepended(input: bytes) -> bytes:
 
 def decompress_with_dict(input: bytes, ext_dict: bytes) -> bytes:
     """
-    Decompress input bytes using a user-provided dictionary of bytes.
+    Decompress input bytes using a user-provided dictionary of
+    bytes.
 
     Args:
         input (`bytes`):
@@ -121,7 +126,8 @@ def get_maximum_output_size(input_len: int) -> int:
 
     Args:
         input_len (`int`):
-            length of the bytes we need to allocate to compress into fixed buffer.
+            length of the bytes we need to allocate to compress
+            into fixed buffer.
     Returns:
         `int`:
             maximum possible size of the output buffer needs to be."""
