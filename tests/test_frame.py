@@ -39,7 +39,7 @@ def test_compare_read_bytes_buffer():
             block_size=BlockSize.Max64KB, block_mode=BlockMode.Independent
         )
         buffer = compress_with_info(output.encode("utf-8"), FrameInfo.default())
-        info = FrameInfo.read(buffer)
+        info = FrameInfo.read_header_info(buffer)
         assert expected == info
 
 
