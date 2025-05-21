@@ -20,7 +20,7 @@ fn _safelz4_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // simple Error module for LZ4Exception throwing
     register_error_module(m)?;
 
-    // register frame module habdling enflate, and deflate files.
+    // register frame module habdling decompress, and compress files.
     register_frame_module(m)?;
 
     // Add version and description as module-level constants

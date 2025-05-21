@@ -148,15 +148,15 @@ class open_frame:
         """Exit the context manager and clean up resources."""
         ...
 
-def enflate(input: bytes) -> bytes:
+def decompress(input: bytes) -> bytes:
     """
     Decompresses a buffer of bytes using thex LZ4 frame format.
 
     Args:
         input (`bytes`):
             A byte containing LZ4-compressed data (in frame format).
-            Typically obtained from a prior call to an `deflate` or read from
-            a compressed file `deflate_file`.
+            Typically obtained from a prior call to an `compress` or read from
+            a compressed file `compress_file`.
 
     Returns:
         `bytes`:
@@ -164,7 +164,7 @@ def enflate(input: bytes) -> bytes:
     """
     ...
 
-def enflate_file(filename: Union[os.PathLike, str]) -> bytes:
+def decompress_file(filename: Union[os.PathLike, str]) -> bytes:
     """
     Decompresses a buffer of bytes into a file using thex LZ4 frame format.
 
@@ -178,7 +178,7 @@ def enflate_file(filename: Union[os.PathLike, str]) -> bytes:
     """
     ...
 
-def deflate(input: bytes) -> bytes:
+def compress(input: bytes) -> bytes:
     """
     Compresses a buffer of LZ4-compressed bytes using the LZ4 frame format.
 
@@ -191,7 +191,7 @@ def deflate(input: bytes) -> bytes:
     """
     ...
 
-def deflate_file(filename: Union[os.PathLike, str], input: bytes) -> None:
+def compress_file(filename: Union[os.PathLike, str], input: bytes) -> None:
     """
     Compresses a buffer of bytes into a file using using the LZ4 frame format.
 
@@ -206,7 +206,7 @@ def deflate_file(filename: Union[os.PathLike, str], input: bytes) -> None:
     """
     ...
 
-def deflate_file_with_info(
+def compress_file_with_info(
     filename: Union[os.PathLike, str],
     input: bytes,
     info: Optional[FrameInfo] = None,
@@ -228,7 +228,7 @@ def deflate_file_with_info(
     """
     ...
 
-def deflate_with_info(
+def compress_with_info(
     input: bytes,
     info: Optional[FrameInfo] = None,
 ) -> None:

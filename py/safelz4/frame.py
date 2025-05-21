@@ -8,24 +8,24 @@ __all__ = [
     "FrameInfo",
     "BlockMode",
     "BlockSize",
-    "enflate",
-    "deflate",
-    "enflate_file",
-    "deflate_file",
-    "deflate_file_with_info",
-    "deflate_with_info",
+    "decompress",
+    "compress",
+    "decompress_file",
+    "compress_file",
+    "compress_file_with_info",
+    "compress_with_info",
 ]
 
 
-def enflate(input: bytes) -> bytes:
+def decompress(input: bytes) -> bytes:
     """
     Decompresses a buffer of bytes using thex LZ4 frame format.
 
     Args:
         input (`bytes`):
             A byte containing LZ4-compressed data (in frame format).
-            Typically obtained from a prior call to an `deflate` or read from
-            a compressed file `deflate_file`.
+            Typically obtained from a prior call to an `compress` or read from
+            a compressed file `compress_file`.
 
     Returns:
         `bytes`:
@@ -33,22 +33,22 @@ def enflate(input: bytes) -> bytes:
 
     Example:
     ```python
-    from safelz4.frame import enflate, deflate
+    from safelz4.frame import decompress, compress
     input_c = b'\x04"M\x18`@\x82O\x00\x00\x00\xff4hello world this is an '\
               b'example of text I would like to compresss ee\x02\x00&`eeeeee'\
               b'\x00\x00\x00\x00'
 
-    output = enflate(input_c)
+    output = decompress(input_c)
     expected = b"hello world this is an example of text I would like to "\
                b"compresss eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"\
                b"eeeeeeeeeeeeeeeeee"
     assert expected == output
     ```
     """
-    return _frame.enflate(input)
+    return _frame.decompress(input)
 
 
-def enflate_file(filename: Union[os.PathLike, str]) -> bytes:
+def decompress_file(filename: Union[os.PathLike, str]) -> bytes:
     """
     Decompresses a buffer of bytes into a file using thex LZ4 frame format.
 
@@ -61,10 +61,10 @@ def enflate_file(filename: Union[os.PathLike, str]) -> bytes:
             The decompressed (original) representation of the input bytes.
 
     """
-    return _frame.enflate_file(filename)
+    return _frame.decompress_file(filename)
 
 
-def deflate(input: bytes) -> bytes:
+def compress(input: bytes) -> bytes:
     """
     Compresses a buffer of LZ4-compressed bytes using the LZ4 frame format.
 
@@ -77,22 +77,22 @@ def deflate(input: bytes) -> bytes:
 
     Example:
     ```python
-    from safelz4.frame import deflate
+    from safelz4.frame import compress
     input_d = b"hello world this is an example of text I would like to "\
                b"compresss eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"\
                b"eeeeeeeeeeeeeeeeee"
 
-    output = deflate(input_d)
+    output = compress(input_d)
     expected = b'\x04"M\x18`@\x82O\x00\x00\x00\xff4hello world this is an '\
                b'example of text I would like to compresss ee\x02\x00&`eeeeee'\
                b'\x00\x00\x00\x00'
     assert output == expected
     ```
     """
-    return _frame.deflate(input)
+    return _frame.compress(input)
 
 
-def deflate_file(filename: Union[os.PathLike, str], input: bytes) -> None:
+def compress_file(filename: Union[os.PathLike, str], input: bytes) -> None:
     """
     Compresses a buffer of bytes into a file using using the LZ4 frame format.
 
@@ -105,10 +105,10 @@ def deflate_file(filename: Union[os.PathLike, str], input: bytes) -> None:
     Returns:
         `None`
     """
-    return _frame.deflate_file(filename, input)
+    return _frame.compress_file(filename, input)
 
 
-def deflate_file_with_info(
+def compress_file_with_info(
     filename: Union[os.PathLike, str],
     input: bytes,
     info: Optional[FrameInfo] = None,
@@ -128,10 +128,10 @@ def deflate_file_with_info(
     Returns:
         `None`
     """
-    return _frame.deflate_file_with_info(filename, input, info)
+    return _frame.compress_file_with_info(filename, input, info)
 
 
-def deflate_with_info(
+def compress_with_info(
     input: bytes,
     info: Optional[FrameInfo] = None,
 ) -> None:
@@ -149,4 +149,4 @@ def deflate_with_info(
         `bytes`:
             The LZ4 frame-compressed representation of the input bytes.
     """
-    return _frame.deflate_with_info(input, info)
+    return _frame.compress_with_info(input, info)

@@ -2,6 +2,7 @@ use std::{
     hash::Hasher,
     io::{Read, Write},
     path::PathBuf,
+    sync::Arc,
 };
 
 use twox_hash::XxHash32;
@@ -135,7 +136,7 @@ struct PyFramInfo {
     /// If set, use the legacy frame format
     pub legacy_frame: bool,
 }
-
+    
 impl From<PyFramInfo> for FrameInfo {
     fn from(val: PyFramInfo) -> Self {
         FrameInfo::new()
@@ -253,12 +254,14 @@ impl PyFramInfo {
         if flg_byte & FLG_VERSION_MASK != FLG_SUPPORTED_VERSION_BITS {
             // version is always 01
             // return Err(Error::UnsupportedVersion(flg_byte & FLG_VERSION_MASK));
-            return Err(LZ4Exception::new_err("unsupported version"))
+            return Err(LZ4Exception::new_err("unsupported version"));
         }
 
         if flg_byte & FLG_RESERVED_MASK != 0 || bd_byte & BD_RESERVED_MASK != 0 {
             // return Err(Error::ReservedBitsSet);
-            return Err(LZ4Exception::new_err("flag bytes reserved bit are not supported"))
+            return Err(LZ4Exception::new_err(
+                "flag bytes reserved bit are not supported",
+            ));
         }
 
         let block_mode = if flg_byte & FLG_INDEPENDENT_BLOCKS != 0 {
@@ -279,6 +282,7 @@ impl PyFramInfo {
             5 => PyBlockSize::Max256KB,
             6 => PyBlockSize::Max1MB,
             7 => PyBlockSize::Max4MB,
+            8 => PyBlockSize::Max8MB,
             _ => unreachable!(),
         };
 
@@ -405,7 +409,7 @@ impl PyFramInfo {
 ///         The LZ4 frame-compressed representation of the input bytes.
 #[pyfunction]
 #[pyo3(signature = (input))]
-fn deflate<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes>> {
+fn compress<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes>> {
     let wtr = Vec::with_capacity(input.len());
 
     let mut encoder = FrameEncoder::new(wtr);
@@ -432,7 +436,7 @@ fn deflate<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes>
 ///     `None`
 #[pyfunction]
 #[pyo3(signature = (filename, input))]
-fn deflate_file(filename: PathBuf, input: &[u8]) -> PyResult<()> {
+fn compress_file(filename: PathBuf, input: &[u8]) -> PyResult<()> {
     let file = std::fs::File::create(&filename)
         .map_err(|_| PyFileExistsError::new_err(format!("{filename:?} already exist.")))?;
     let vec = std::io::BufWriter::new(file);
@@ -461,7 +465,7 @@ fn deflate_file(filename: PathBuf, input: &[u8]) -> PyResult<()> {
 ///    `None`
 #[pyfunction]
 #[pyo3(signature = (filename, input, info = None))]
-fn deflate_file_with_info(
+fn compress_file_with_info(
     filename: PathBuf,
     input: &[u8],
     info: Option<PyFramInfo>,
@@ -490,7 +494,7 @@ fn deflate_file_with_info(
 ///         The LZ4 frame-compressed representation of the input bytes.
 #[pyfunction]
 #[pyo3(signature = (input, info = None))]
-fn deflate_with_info<'py>(
+fn compress_with_info<'py>(
     py: Python<'py>,
     input: &[u8],
     info: Option<PyFramInfo>,
@@ -512,14 +516,14 @@ fn deflate_with_info<'py>(
 /// Args:
 ///     input (`bytes`):
 ///         A byte containing LZ4-compressed data (in frame format).
-///         Typically obtained from a prior call to an `deflate`, `deflate_with_info` or read from
-///         a compressed file `deflate_file`, or `deflate_file_with_info`.
+///         Typically obtained from a prior call to an `compress`, `compress_with_info` or read from
+///         a compressed file `compress_file`, or `compress_file_with_info`.
 /// Returns:
 ///     `bytes`:
 ///         The decompressed (original) representation of the input bytes.
 #[pyfunction]
 #[pyo3(signature = (input))]
-fn enflate<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes>> {
+fn decompress<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes>> {
     let mut decoder = FrameDecoder::new(input);
     let mut buffer = Vec::new();
     decoder.read_to_end(&mut buffer)?;
@@ -537,7 +541,7 @@ fn enflate<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes>
 ///        The decompressed (original) representation of the input bytes.
 #[pyfunction]
 #[pyo3(signature = (filename))]
-fn enflate_file(py: Python<'_>, filename: PathBuf) -> PyResult<PyBound<'_, PyBytes>> {
+fn decompress_file(py: Python<'_>, filename: PathBuf) -> PyResult<PyBound<'_, PyBytes>> {
     let file = std::fs::File::open(&filename)
         .map_err(|_| PyFileExistsError::new_err(format!("{filename:?} already exist.")))?;
     let rdr = std::io::BufReader::new(file);
@@ -549,50 +553,106 @@ fn enflate_file(py: Python<'_>, filename: PathBuf) -> PyResult<PyBound<'_, PyByt
 }
 
 
-#[derive(Debug)]
+// struct OpenFrame<T> {
+//     inner : T,
+//     info : PyFramInfo,
+// }
+
+
+
+// impl<T : Write> OpenFrame<T> {
+//     fn new(wtr : T, info : PyFramInfo) -> OpenFrame<T> {
+//         Self {
+//             inner : wtr,
+//             info
+
+//         }
+//     }
+//     fn write(&mut self, buffer : &[u8]) -> Result<usize, std::io::Error>{
+//         self.inner.write(buffer)
+//     }
+
+//     pub(crate) fn info(&self) -> PyFramInfo {
+//         self.info.clone()
+//     }
+
+//     /// deompression output size for allocation of memmory
+//     pub(crate) fn content_size(&self) -> Option<u64> {
+//         self.info.content_size
+//     }
+
+//     /// maximum block size decompressed 
+//     pub(crate) fn block_size(&self) -> PyBlockSize {
+//         self.info.block_size.clone()
+//     }
+// }
+
+// impl<Open : Read> OpenFrame<Open> {
+
+// }
+
 struct Open {
-    buffer  : Mmap,
-    info    : Option<PyFramInfo>,
-    offset  : usize
+    storage: Arc<Mmap>,
+    info   : PyFramInfo,
+    offset : usize
 }
 
 impl Open {
 
-    pub(crate) fn new(filename : PathBuf) -> PyResult<Self> {
+    /// instaniate the mmap of ReadOnly file. 
+    pub(crate) fn new(filename: PathBuf) -> PyResult<Self> {
         let file = std::fs::File::open(filename)?;
 
-        let buffer = unsafe { MmapOptions::new().map_copy_read_only(&file)? };
-        let info = Some(PyFramInfo::read(&buffer)?);
-        let offset = PyFramInfo::read_size(&buffer)?;
-
+        let storage = Arc::new(unsafe { MmapOptions::new().map_copy_read_only(&file)? });
+        let info = PyFramInfo::read(&storage)?;
+        let offset = PyFramInfo::read_size(&storage)?;
         Ok(Self {
-            buffer,
+            storage,
             info,
-            offset
+            offset, 
         })
     }
 
-    pub(crate) fn info(&self) -> Option<PyFramInfo> {
+    /// helper of [`open_frame`] to access the FrameInfo of frame file.
+    pub(crate) fn info(&self) -> PyFramInfo {
         self.info.clone()
     }
 
-    pub(crate) fn decompress<'py>(&self, py : Python<'py>) -> PyResult<PyBound<'py, PyBytes>> {
-        if let Some(_) = self.info() {
-            enflate(py, &self.buffer)
-        } else {
-            Err(LZ4Exception::new_err("File failed to decompress frame."))
-        }
+    /// deompression output size for allocation of memmory
+    pub(crate) fn content_size(&self) -> Option<u64> {
+        self.info.content_size
     }
- }
 
+    pub(crate) fn block_size(&self) -> PyBlockSize {
+        self.info.block_size.clone()
+    }
+
+    /// decompress the the bytes within the Read only [`Mmap`]
+    pub(crate) fn decompress<'py>(&self, py: Python<'py>) -> PyResult<PyBound<'py, PyBytes>> {
+        decompress(py, &self.storage)
+    }
+}
+
+/// Context manager that allows us to decompresses a buffer of bytes using thex LZ4 frame format.
+///
+/// Example:
+/// ```ignore
+/// output = None
+/// with open_frame("datafile") as f:
+///     output = f.decompress()
+///
+/// print(output)
+/// ```
+///
 #[pyclass]
 #[allow(non_camel_case_types)]
 struct open_frame {
     inner: Option<Open>,
 }
 
-
 impl open_frame {
+
+    /// helper that reduces the syntax in case of None open_frame
     pub(crate) fn inner(&self) -> PyResult<&Open> {
         let inner = self
             .inner
@@ -602,9 +662,15 @@ impl open_frame {
     }
 }
 
+struct PyBlockSlice<'data> {
+    size : usize,
+    buffer : &'data [u8],
+    checksum : [u8; 4]
+}
+
 #[pymethods]
 impl open_frame {
-
+    /// Initialize the open_frame context manager with a filename.
     #[new]
     #[pyo3(signature = (filename))]
     fn new(filename: PathBuf) -> PyResult<Self> {
@@ -617,27 +683,46 @@ impl open_frame {
     /// Returns:
     ///     `FrameInfo`:
     ///         The freeform FrameInfo.
-    pub fn info(&self) -> PyResult<Option<PyFramInfo>> {
+    pub fn info(&self) -> PyResult<PyFramInfo> {
         Ok(self.inner()?.info())
     }
 
-    pub fn decompress<'py>(&self, py : Python<'py>) -> PyResult<PyBound<'py, PyBytes>>{
-        self.inner()?.decompress(py)  
+    /// Return the content size of the frame
+    ///
+    /// Returns:
+    ///     `int`: size of each 
+    pub fn content_size(&self) -> PyResult<Option<u64>> {
+        Ok(self.inner()?.content_size())
     }
 
-     /// Start the context manager
-     pub fn __enter__(slf: Py<Self>) -> Py<Self> {
+    /// Returns the decompress block size of each individual block
+    /// 
+    /// Returns
+    ///     `BlockSize`: 
+    pub fn block_size(&self) -> PyResult<PyBlockSize> {
+        Ok(self.inner()?.block_size())
+    }
+
+    /// Decompress the whole frame file
+    ///
+    /// Returns:
+    ///     `bytes`:
+    ///         The decompressed (original) representation of the bytes within the file.
+    ///
+    pub fn decompress<'py>(&self, py: Python<'py>) -> PyResult<PyBound<'py, PyBytes>> {
+        self.inner()?.decompress(py)
+    }
+
+    /// Enter the context manager and return self.
+    pub fn __enter__(slf: Py<Self>) -> Py<Self> {
         slf
     }
 
-    /// Exits the context manager
+    /// Exit the context manager and clean up resources.
     pub fn __exit__(&mut self, _exc_type: PyObject, _exc_value: PyObject, _traceback: PyObject) {
         self.inner = None;
     }
 }
-
-
-
 
 /// register frame module handles which handles Frame de/compression of frames.
 ///
@@ -645,19 +730,19 @@ impl open_frame {
 /// from .safelz4_rs import _frame
 ///
 /// plaintext = b"eeeeeeee Hello world this is an example of plaintext being compressed eeeeeeeeeeeeeee"
-/// output = _frame.deflate(plaintext)
-/// output = _frame.enflate(output)
+/// output = _frame.compress(plaintext)
+/// output = _frame.decompress(output)
 /// ```
 pub(crate) fn register_frame_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let frame_m = PyModule::new(m.py(), "_frame")?;
 
     // function
-    frame_m.add_function(wrap_pyfunction!(deflate, &frame_m)?)?;
-    frame_m.add_function(wrap_pyfunction!(deflate_file, &frame_m)?)?;
-    frame_m.add_function(wrap_pyfunction!(deflate_file_with_info, &frame_m)?)?;
-    frame_m.add_function(wrap_pyfunction!(deflate_with_info, &frame_m)?)?;
-    frame_m.add_function(wrap_pyfunction!(enflate_file, &frame_m)?)?;
-    frame_m.add_function(wrap_pyfunction!(enflate, &frame_m)?)?;
+    frame_m.add_function(wrap_pyfunction!(compress, &frame_m)?)?;
+    frame_m.add_function(wrap_pyfunction!(compress_file, &frame_m)?)?;
+    frame_m.add_function(wrap_pyfunction!(compress_file_with_info, &frame_m)?)?;
+    frame_m.add_function(wrap_pyfunction!(compress_with_info, &frame_m)?)?;
+    frame_m.add_function(wrap_pyfunction!(decompress_file, &frame_m)?)?;
+    frame_m.add_function(wrap_pyfunction!(decompress, &frame_m)?)?;
 
     // class objects
     frame_m.add_class::<PyFramInfo>()?;

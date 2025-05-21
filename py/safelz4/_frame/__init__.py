@@ -8,13 +8,13 @@ FrameInfo = _frame.FrameInfo
 
 open_frame = _frame.open_frame
 
-deflate = _frame.deflate
-deflate_file = _frame.deflate_file
-deflate_file_with_info = _frame.deflate_file_with_info
-deflate_with_info = _frame.deflate_with_info
+compress = _frame.compress
+compress_file = _frame.compress_file
+compress_file_with_info = _frame.compress_file_with_info
+compress_with_info = _frame.compress_with_info
 
-enflate = _frame.enflate
-enflate_file = _frame.enflate_file
+decompress = _frame.decompress
+decompress_file = _frame.decompress_file
 
 FLG_RESERVED_MASK = _frame.FLG_RESERVED_MASK
 FLG_VERSION_MASK = _frame.FLG_VERSION_MASK

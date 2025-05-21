@@ -7,7 +7,7 @@ with atheris.instrument_imports():
 
 def TestDecompCorruptFrame(data: bytes):
     try:
-        safelz4.deflate(data)
+        safelz4.compress(data)
     except safelz4.LZ4Exception:
         return
 
@@ -20,7 +20,7 @@ def TestDecompCorruptFrame(data: bytes):
         buffer.extend(prefix)
         buffer.extend(data)
         try:
-            safelz4.deflate(buffer)
+            safelz4.compress(buffer)
         except safelz4.LZ4Exception:
             return
 
@@ -39,7 +39,7 @@ def TestDecompCorruptFrame(data: bytes):
             buffer.clear()
             buffer.extend(prefix)
             buffer.extend(data)
-            safelz4.deflate(buffer)
+            safelz4.compress(buffer)
             # use prefix then 2 valid blocks of data
             buffer.clear()
             buffer.extend(prefix)
@@ -47,7 +47,7 @@ def TestDecompCorruptFrame(data: bytes):
             buffer.extend(data)
             buffer.extend(int.to_bytes(len(data), length=4, byteorder="little"))
             buffer.extend(data)
-            safelz4.deflate(buffer)
+            safelz4.compress(buffer)
         except safelz4.LZ4Exception as e:
             print(e, buffer)
             continue

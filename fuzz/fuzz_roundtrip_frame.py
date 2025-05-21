@@ -8,8 +8,8 @@ with atheris.instrument_imports():
         BlockMode,
         BlockSize,
         FrameInfo,
-        deflate_with_info,
-        enflate,
+        compress_with_info,
+        decompress,
     )
 
 
@@ -52,10 +52,10 @@ def TestRoundTripFrame(data: bytes):
 
                 try:
                     # Compress bytes with info
-                    compressed = deflate_with_info(input_data, fi)
+                    compressed = compress_with_info(input_data, fi)
 
                     # Decompress bytes into basic representation
-                    decompressed = enflate(compressed)
+                    decompressed = decompress(compressed)
 
                     # Verify round trip was successful
                     assert input_data == decompressed
