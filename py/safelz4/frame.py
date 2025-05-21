@@ -28,21 +28,18 @@ def decompress(input: bytes) -> bytes:
             a compressed file `compress_file`.
 
     Returns:
-        `bytes`:
+        (`bytes`):
             The decompressed (original) representation of the input bytes.
 
     Example:
-    ```python
-    from safelz4.frame import decompress, compress
-    input_c = b'\x04"M\x18`@\x82O\x00\x00\x00\xff4hello world this is an '\
-              b'example of text I would like to compresss ee\x02\x00&`eeeeee'\
-              b'\x00\x00\x00\x00'
 
-    output = decompress(input_c)
-    expected = b"hello world this is an example of text I would like to "\
-               b"compresss eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"\
-               b"eeeeeeeeeeeeeeeeee"
-    assert expected == output
+    ```python
+    from safelz4 import decompress
+    
+    output = None
+    with open("datafile.lz4", "r")  as file:
+        buffer = file.read(-1).encode("utf-8")
+        output = decompress(buffer)
     ```
     """
     return _frame.decompress(input)
@@ -57,9 +54,17 @@ def decompress_file(filename: Union[os.PathLike, str]) -> bytes:
             The filename we are loading from.
 
     Returns:
-        `bytes`:
+        (`bytes`):
             The decompressed (original) representation of the input bytes.
 
+    Example:
+
+    ```python
+    from safelz4 import decompress
+    
+    output = decompress("datafile.lz4")
+    ```
+            
     """
     return _frame.decompress_file(filename)
 
@@ -72,21 +77,19 @@ def compress(input: bytes) -> bytes:
         input (`bytes`):
             An arbitrary byte buffer to be compressed.
     Returns:
-        `bytes`:
+        (`bytes`):
              The LZ4 frame-compressed representation of the input bytes.
 
     Example:
     ```python
     from safelz4.frame import compress
-    input_d = b"hello world this is an example of text I would like to "\
-               b"compresss eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"\
-               b"eeeeeeeeeeeeeeeeee"
+    
+    buffer = None
+    with open("datafile.txt", "r") as file:
+        output = file.read(-1).encode("utf-8")
+        buffer = compress(output)
 
-    output = compress(input_d)
-    expected = b'\x04"M\x18`@\x82O\x00\x00\x00\xff4hello world this is an '\
-               b'example of text I would like to compresss ee\x02\x00&`eeeeee'\
-               b'\x00\x00\x00\x00'
-    assert output == expected
+    # ...
     ```
     """
     return _frame.compress(input)
@@ -102,8 +105,18 @@ def compress_file(filename: Union[os.PathLike, str], input: bytes) -> None:
         input (`bytes`):
             un-compressed representation of the input bytes.
 
+    Example:
+    ```python
+    from safelz4.frame import compress
+    
+    with open("datafile.txt", "r") as file:
+        buffer = file.read(-1).encode("utf-8")
+        compress_file("datafile.lz4", buf_f)
+
+    ```
+
     Returns:
-        `None`
+        (`None`)
     """
     return _frame.compress_file(filename, input)
 
@@ -126,7 +139,7 @@ def compress_file_with_info(
             The metadata for de/compressing with lz4 frame format.
 
     Returns:
-        `None`
+        (`None`)
     """
     return _frame.compress_file_with_info(filename, input, info)
 
@@ -146,7 +159,7 @@ def compress_with_info(
             The metadata for de/compressing with lz4 frame format.
 
     Returns:
-        `bytes`:
+        (`bytes`):
             The LZ4 frame-compressed representation of the input bytes.
     """
     return _frame.compress_with_info(input, info)

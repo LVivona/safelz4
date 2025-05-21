@@ -7,7 +7,7 @@ def compress(input: bytes) -> bytes:
             fixed set of bytes to be compressed.
 
     Returns:
-        `bytes`: Compressed LZ4 block format.
+        (`bytes`): Compressed LZ4 block format.
     """
     ...
 
@@ -23,7 +23,7 @@ def compress_prepend_size(input: bytes) -> bytes:
             fixed set of bytes to be compressed.
 
     Returns:
-        `bytes`: Compressed LZ4 block data with the uncompressed size prepended.
+        (`bytes`): Compressed LZ4 block data with the uncompressed size prepended.
     """
     ...
 
@@ -39,7 +39,7 @@ def compress_into(input: bytes, output: bytearray) -> int:
             Mutable buffer to hold combessed bytes.
 
     Returns:
-        `int`: Number of bytes written to the output buffer.
+        (`int`): Number of bytes written to the output buffer.
     """
     ...
 
@@ -54,7 +54,7 @@ def compress_with_dict(input: bytes, dictionary: bytes) -> bytes:
             Dictionary used for compression.
 
     Returns:
-        `bytes`: fixed set of bytes to be decompressed.
+        (`bytes`): fixed set of bytes to be decompressed.
     """
     ...
 
@@ -69,7 +69,7 @@ def decompress(input: bytes, min_size: int) -> int:
             minimum possible size of uncompressed bytes
 
     Returns:
-        `bytes`: decompressed repersentation of the compressed bytes.
+        (`bytes`): decompressed repersentation of the compressed bytes.
     """
     ...
 
@@ -86,7 +86,7 @@ def decompress_into(input: bytes, output: bytearray) -> int:
             Mutable buffer to hold decompressed bytes.
 
     Returns:
-        `int`: Number of bytes written to the output buffer.
+        (`int`): Number of bytes written to the output buffer.
     """
     ...
 
@@ -100,7 +100,7 @@ def decompress_size_prepended(input: bytes) -> bytes:
             fixed set of bytes to be decompressed
 
     Returns:
-        `bytes`: Decompressed data.
+        (`bytes`): Decompressed data.
     """
     ...
 
@@ -116,7 +116,7 @@ def decompress_with_dict(input: bytes, ext_dict: bytes) -> bytes:
             Dictionary used for decompression.
 
     Returns:
-        `bytes`: Decompressed data.
+        (`bytes`): Decompressed data.
     """
     ...
 
@@ -129,6 +129,6 @@ def get_maximum_output_size(input_len: int) -> int:
             length of the bytes we need to allocate to compress
             into fixed buffer.
     Returns:
-        `int`:
+        (`int`):
             maximum possible size of the output buffer needs to be."""
     ...
