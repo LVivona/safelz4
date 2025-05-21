@@ -73,7 +73,7 @@ impl From<PyBlockMode> for BlockMode {
 ///     Max1MB: 1MB block size.
 ///     Max4MB: 4MB block size.
 ///     Max8MB: 8MB block size.
-#[pyclass(name = "BlockSize")]
+#[pyclass(eq, eq_int, name = "BlockSize")]
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 enum PyBlockSize {
     /// Will detect optimal frame size based on the size of the first write call
