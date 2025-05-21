@@ -70,15 +70,29 @@ class FrameInfo:
         content_checksum: Optional[bool] = None,
         content_size: Optional[int] = None,
         legacy_frame: Optional[bool] = None,
-    ) -> "FrameInfo": ...
+    ) -> Self: ...
     @staticmethod
-    def default() -> Self: ...
+    def default() -> Self: 
+        """
+        build a default `FrameInfo` class.
+        
+        Returns:
+            (`FrameInfo`): default object.
+        """
+        ...
     @staticmethod
-    def read(input: bytes) -> Self: ...
+    def read_header_info(input: bytes) -> Self: 
+        """Read header info to construct header."""
+        ...
+    def read_header_size(input: bytes) -> Self: 
+        """Read the size of the header info"""
+        ...
     @property
     def block_checksums(self) -> bool: ...
     @block_checksums.setter
     def block_checksums(self, value: bool) -> None: ...
+    @property
+    def block_size(self) -> BlockSize: ...
     @property
     def block_mode(self) -> BlockMode: ...
     @property
@@ -128,7 +142,7 @@ class open_frame:
         """
         Decompress the whole frame file.
         Returns:
-            `bytes`:
+            (`bytes`):
                 The decompressed (original) representation of the bytes
                 within the file.
         """
@@ -159,7 +173,7 @@ def decompress(input: bytes) -> bytes:
             a compressed file `compress_file`.
 
     Returns:
-        `bytes`:
+        (`bytes`):
             The decompressed (original) representation of the input bytes.
     """
     ...
@@ -173,7 +187,7 @@ def decompress_file(filename: Union[os.PathLike, str]) -> bytes:
             The filename we are loading from.
 
     Returns:
-        `bytes`:
+        (`bytes`):
             The decompressed (original) representation of the input bytes.
     """
     ...
@@ -202,7 +216,7 @@ def compress_file(filename: Union[os.PathLike, str], input: bytes) -> None:
             un-compressed representation of the input bytes.
 
     Returns:
-        `None`
+        (`None`)
     """
     ...
 
@@ -224,7 +238,7 @@ def compress_file_with_info(
             The metadata for de/compressing with lz4 frame format.
 
     Returns:
-        `None`
+        (`None`)
     """
     ...
 
@@ -243,7 +257,7 @@ def compress_with_info(
             The metadata for de/compressing with lz4 frame format.
 
     Returns:
-        `bytes`:
+        (`bytes`):
             The LZ4 frame-compressed representation of the input bytes.
     """
     ...

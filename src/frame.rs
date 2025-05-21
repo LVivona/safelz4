@@ -113,7 +113,7 @@ impl From<PyBlockSize> for BlockSize {
 ///     content_checksum: If set, includes a content checksum to verify that the full frame contents have been decoded correctly.
 ///     legacy_frame: If set, use the legacy frame format.
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
-#[pyclass(name = "FrameInfo", subclass, eq)]
+#[pyclass(name = "FrameInfo", eq)]
 struct PyFramInfo {
     /// If set, includes the total uncompressed size of data in the frame.
     pub content_size: Option<u64>,
@@ -180,8 +180,10 @@ impl PyFramInfo {
         }
     }
 
+    /// Since the header size is dynamic we can read the size of the header before 
+    /// we build our frame class.
     #[staticmethod]
-    fn read_size(input: &[u8]) -> PyResult<usize> {
+    fn read_header_size(input: &[u8]) -> PyResult<usize> {
         if input.len() < 5 {
             return Err(LZ4Exception::new_err("Too small to read magic number."));
         }
@@ -213,9 +215,8 @@ impl PyFramInfo {
     }
 
     #[staticmethod]
-    fn read(mut input: &[u8]) -> PyResult<PyFramInfo> {
-        // 4 (magic number) + 2 (flag bytes) + 1 ()
-
+    fn read_header_info(mut input: &[u8]) -> PyResult<PyFramInfo> {
+        
         let original_input = input;
         // 4 byte Magic
         let magic_num = {
@@ -333,8 +334,13 @@ impl PyFramInfo {
     }
 
     #[getter]
-    fn get_block_mode<'py>(&self, py: Python<'py>) -> PyResult<PyBound<'py, PyBlockMode>> {
-        self.block_mode.clone().into_pyobject(py)
+    fn get_block_mode(&self) -> PyResult<PyBlockMode> {
+        Ok(self.block_mode.clone())
+    }
+
+    #[getter]
+    fn get_block_size<'py>(&self) -> PyResult<PyBlockSize> {
+        Ok(self.block_size.clone())
     }
 
     #[getter]
@@ -604,8 +610,8 @@ impl Open {
         let file = std::fs::File::open(filename)?;
 
         let storage = Arc::new(unsafe { MmapOptions::new().map_copy_read_only(&file)? });
-        let info = PyFramInfo::read(&storage)?;
-        let offset = PyFramInfo::read_size(&storage)?;
+        let info = PyFramInfo::read_header_info(&storage)?;
+        let offset = PyFramInfo::read_header_size(&storage)?;
         Ok(Self {
             storage,
             info,
