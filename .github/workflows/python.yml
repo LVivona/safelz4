@@ -12,7 +12,7 @@ jobs:
         os: [ubuntu-latest, macos-13, windows-latest]
     defaults:
       run:
-        working-directory: ./binding/python
+        working-directory: ./
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -28,7 +28,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "binding/python"
+          workspaces: ""
 
       - name: Lint with RustFmt
         run: cargo fmt -- --check
