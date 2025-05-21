@@ -131,14 +131,14 @@ def test_header_default():
     # You can now read the compressed data frame info using the library's functionality 
     # and compare it with your manual parsing
     
-    frame_info : FrameInfo = FrameInfo.read(compressed)
+    frame_info = FrameInfo.read_header_info(compressed)
     for byte in compressed[0:pos]:
         print(f"{bin(byte):0<8}", end=" ")
         
 
     assert frame_info.block_checksums == block_checksums
     assert frame_info.block_mode == block_mode
-    assert frame_info.block_size == block_size
+    assert block_size == frame_info.block_size
     assert frame_info.content_checksum == content_checksum
     assert frame_info.content_size == content_size
     print(f"\nLibrary parsed frame info: {frame_info}")
