@@ -73,7 +73,7 @@ impl From<PyBlockMode> for BlockMode {
 ///     Max1MB: 1MB block size.
 ///     Max4MB: 4MB block size.
 ///     Max8MB: 8MB block size.
-#[pyclass(name = "BlockSize")]
+#[pyclass(eq, eq_int, name = "BlockSize")]
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 enum PyBlockSize {
     /// Will detect optimal frame size based on the size of the first write call
@@ -136,7 +136,7 @@ struct PyFramInfo {
     /// If set, use the legacy frame format
     pub legacy_frame: bool,
 }
-    
+
 impl From<PyFramInfo> for FrameInfo {
     fn from(val: PyFramInfo) -> Self {
         FrameInfo::new()
@@ -180,7 +180,7 @@ impl PyFramInfo {
         }
     }
 
-    /// Since the header size is dynamic we can read the size of the header before 
+    /// Since the header size is dynamic we can read the size of the header before
     /// we build our frame class.
     #[staticmethod]
     fn read_header_size(input: &[u8]) -> PyResult<usize> {
@@ -216,7 +216,6 @@ impl PyFramInfo {
 
     #[staticmethod]
     fn read_header_info(mut input: &[u8]) -> PyResult<PyFramInfo> {
-        
         let original_input = input;
         // 4 byte Magic
         let magic_num = {
@@ -339,7 +338,7 @@ impl PyFramInfo {
     }
 
     #[getter]
-    fn get_block_size<'py>(&self) -> PyResult<PyBlockSize> {
+    fn get_block_size(&self) -> PyResult<PyBlockSize> {
         Ok(self.block_size.clone())
     }
 
@@ -349,7 +348,7 @@ impl PyFramInfo {
     }
 
     #[getter]
-    fn get_content_sum(&self) -> PyResult<bool> {
+    fn get_content_checksum(&self) -> PyResult<bool> {
         Ok(self.content_checksum)
     }
 
@@ -558,54 +557,18 @@ fn decompress_file(py: Python<'_>, filename: PathBuf) -> PyResult<PyBound<'_, Py
     Ok(PyBytes::new(py, &buffer))
 }
 
-
-// struct OpenFrame<T> {
-//     inner : T,
-//     info : PyFramInfo,
-// }
-
-
-
-// impl<T : Write> OpenFrame<T> {
-//     fn new(wtr : T, info : PyFramInfo) -> OpenFrame<T> {
-//         Self {
-//             inner : wtr,
-//             info
-
-//         }
-//     }
-//     fn write(&mut self, buffer : &[u8]) -> Result<usize, std::io::Error>{
-//         self.inner.write(buffer)
-//     }
-
-//     pub(crate) fn info(&self) -> PyFramInfo {
-//         self.info.clone()
-//     }
-
-//     /// deompression output size for allocation of memmory
-//     pub(crate) fn content_size(&self) -> Option<u64> {
-//         self.info.content_size
-//     }
-
-//     /// maximum block size decompressed 
-//     pub(crate) fn block_size(&self) -> PyBlockSize {
-//         self.info.block_size.clone()
-//     }
-// }
-
-// impl<Open : Read> OpenFrame<Open> {
-
-// }
-
 struct Open {
+    /// Atomic read only access to file memory.
     storage: Arc<Mmap>,
-    info   : PyFramInfo,
-    offset : usize
+    /// Frame file type info
+    info: PyFramInfo,
+    /// offset **used for release build**
+    #[allow(dead_code)]
+    offset: usize,
 }
 
 impl Open {
-
-    /// instaniate the mmap of ReadOnly file. 
+    /// instaniate the mmap of ReadOnly file.
     pub(crate) fn new(filename: PathBuf) -> PyResult<Self> {
         let file = std::fs::File::open(filename)?;
 
@@ -615,7 +578,7 @@ impl Open {
         Ok(Self {
             storage,
             info,
-            offset, 
+            offset,
         })
     }
 
@@ -657,7 +620,6 @@ struct open_frame {
 }
 
 impl open_frame {
-
     /// helper that reduces the syntax in case of None open_frame
     pub(crate) fn inner(&self) -> PyResult<&Open> {
         let inner = self
@@ -666,12 +628,6 @@ impl open_frame {
             .ok_or_else(|| LZ4Exception::new_err("File is closed".to_string()))?;
         Ok(inner)
     }
-}
-
-struct PyBlockSlice<'data> {
-    size : usize,
-    buffer : &'data [u8],
-    checksum : [u8; 4]
 }
 
 #[pymethods]
@@ -685,7 +641,6 @@ impl open_frame {
     }
 
     /// Return the frameinfo of the compression file
-    ///
     /// Returns:
     ///     `FrameInfo`:
     ///         The freeform FrameInfo.
@@ -694,17 +649,15 @@ impl open_frame {
     }
 
     /// Return the content size of the frame
-    ///
     /// Returns:
-    ///     `int`: size of each 
+    ///     `int`: size of each.
     pub fn content_size(&self) -> PyResult<Option<u64>> {
         Ok(self.inner()?.content_size())
     }
 
     /// Returns the decompress block size of each individual block
-    /// 
     /// Returns
-    ///     `BlockSize`: 
+    ///     `BlockSize`: size for frame compression.
     pub fn block_size(&self) -> PyResult<PyBlockSize> {
         Ok(self.inner()?.block_size())
     }
