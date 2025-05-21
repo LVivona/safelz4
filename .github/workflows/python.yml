@@ -53,7 +53,7 @@ jobs:
       - name: Check style
         run: |
           pip install .[quality]
-          black --check --line-length 80 --target-version py35 py/bintensors
+          black --check --line-length 80 --target-version py35 py/safelz4
 
       - name: Run tests
         run: |
