@@ -348,7 +348,7 @@ impl PyFramInfo {
     }
 
     #[getter]
-    fn get_content_sum(&self) -> PyResult<bool> {
+    fn get_content_checksum(&self) -> PyResult<bool> {
         Ok(self.content_checksum)
     }
 
