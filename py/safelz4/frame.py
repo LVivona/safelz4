@@ -35,7 +35,7 @@ def decompress(input: bytes) -> bytes:
 
     ```python
     from safelz4 import decompress
-
+    
     output = None
     with open("datafile.lz4", "r")  as file:
         buffer = file.read(-1).encode("utf-8")
@@ -61,10 +61,10 @@ def decompress_file(filename: Union[os.PathLike, str]) -> bytes:
 
     ```python
     from safelz4 import decompress
-
+    
     output = decompress("datafile.lz4")
     ```
-
+            
     """
     return _frame.decompress_file(filename)
 
@@ -83,7 +83,7 @@ def compress(input: bytes) -> bytes:
     Example:
     ```python
     from safelz4.frame import compress
-
+    
     buffer = None
     with open("datafile.txt", "r") as file:
         output = file.read(-1).encode("utf-8")
@@ -108,7 +108,7 @@ def compress_file(filename: Union[os.PathLike, str], input: bytes) -> None:
     Example:
     ```python
     from safelz4.frame import compress
-
+    
     with open("datafile.txt", "r") as file:
         buffer = file.read(-1).encode("utf-8")
         compress_file("datafile.lz4", buf_f)

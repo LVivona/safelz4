@@ -12,7 +12,7 @@ jobs:
         os: [ubuntu-latest, macos-13, windows-latest]
     defaults:
       run:
-        working-directory: ./
+        working-directory: ./binding/python
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -28,7 +28,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: ""
+          workspaces: "binding/python"
 
       - name: Lint with RustFmt
         run: cargo fmt -- --check
@@ -53,7 +53,7 @@ jobs:
       - name: Check style
         run: |
           pip install .[quality]
-          black --check --line-length 80 --target-version py35 py/safelz4
+          black --check --line-length 80 --target-version py35 py/bintensors
 
       - name: Run tests
         run: |

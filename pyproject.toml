@@ -18,7 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
-    "Topic :: Scientific/Engineering :: Data Compression",
+    "Topic :: System :: Archiving :: Compression",
     "Typing :: Typed",
 ]
 dynamic = ["version"]
@@ -38,11 +38,8 @@ testing = [
     "pytest>=7.2.0",
     "pytest-benchmark>=4.0.0",
     "hypothesis>=6.70.2",
-    "xxhash==3.5.0 "
-]
-fuzz = [
-    "safelz4[testing]",
     "atheris>=2.3.0 ",
+    "xxhash"
 ]
 
 

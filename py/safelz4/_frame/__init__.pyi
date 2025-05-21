@@ -72,19 +72,19 @@ class FrameInfo:
         legacy_frame: Optional[bool] = None,
     ) -> Self: ...
     @staticmethod
-    def default() -> Self:
+    def default() -> Self: 
         """
         build a default `FrameInfo` class.
-
+        
         Returns:
             (`FrameInfo`): default object.
         """
         ...
     @staticmethod
-    def read_header_info(input: bytes) -> Self:
+    def read_header_info(input: bytes) -> Self: 
         """Read header info to construct header."""
         ...
-    def read_header_size(input: bytes) -> Self:
+    def read_header_size(input: bytes) -> Self: 
         """Read the size of the header info"""
         ...
     @property
@@ -93,8 +93,6 @@ class FrameInfo:
     def block_checksums(self, value: bool) -> None: ...
     @property
     def block_size(self) -> BlockSize: ...
-    @block_size.setter
-    def block_size(self, value: BlockSize) -> None: ...
     @property
     def block_mode(self) -> BlockMode: ...
     @property
