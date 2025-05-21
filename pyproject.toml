@@ -39,6 +39,7 @@ testing = [
     "pytest-benchmark>=4.0.0",
     "hypothesis>=6.70.2",
     "atheris>=2.3.0 ",
+    "xxhash"
 ]
 
 
