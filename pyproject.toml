@@ -38,8 +38,11 @@ testing = [
     "pytest>=7.2.0",
     "pytest-benchmark>=4.0.0",
     "hypothesis>=6.70.2",
+    "xxhash==3.5.0 "
+]
+fuzz = [
+    "safelz4[testing]",
     "atheris>=2.3.0 ",
-    "xxhash"
 ]
 
 
