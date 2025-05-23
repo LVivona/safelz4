@@ -1,9 +1,20 @@
-from ._safelz4_rs import __version__, error
+from ._safelz4_rs import __version__
 import safelz4.block as block
 import safelz4.frame as frame
-from safelz4.frame import compress, decompress, decompress_file, compress_file
-from safelz4._frame import BlockMode, BlockSize, FrameInfo, open_frame
+import safelz4.error as error
+from safelz4.frame import (
+    BlockMode,
+    BlockSize,
+    FrameInfo,
+    compress,
+    decompress,
+    decompress_file,
+    compress_file,
+    is_framefile,
+    open,
+)
 
+# Base Exception error handling for lz4.
 LZ4Exception = error.LZ4Exception
 
 __all__ = [
@@ -16,7 +27,8 @@ __all__ = [
     "LZ4Exception",
     "compress",
     "decompress",
+    "is_framefile",
     "decompress_file",
     "compress_file",
-    "open_frame",
+    "open",
 ]

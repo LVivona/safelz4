@@ -1,6 +1,7 @@
 use std::{
+    fs::File,
     hash::Hasher,
-    io::{Read, Write},
+    io::{BufWriter, Read, Write},
     path::PathBuf,
     sync::Arc,
 };
@@ -9,14 +10,14 @@ use twox_hash::XxHash32;
 
 use memmap2::{Mmap, MmapOptions};
 
-use pyo3::exceptions::{PyFileExistsError, PyIOError};
+use pyo3::exceptions::{PyFileExistsError, PyIOError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::Bound as PyBound;
 
 use lz4_flex::frame::{BlockMode, BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
 
-use crate::error::LZ4Exception;
+use crate::error::{CompressionError, DecompressionError, HeaderError, LZ4Exception, ReadError};
 
 const FLG_RESERVED_MASK: u8 = 0b00000010;
 const FLG_VERSION_MASK: u8 = 0b11000000;
@@ -49,7 +50,7 @@ const BLOCK_INFO_SIZE: usize = 4;
 ///    Independent: Independent block mode.
 ///    Linked: Linked block mode.
 #[pyclass(eq, eq_int, name = "BlockMode")]
-#[derive(Default, Debug, Eq, PartialEq, Clone)]
+#[derive(Default, Debug, Eq, PartialEq, Clone, Copy)]
 enum PyBlockMode {
     #[default]
     Independent,
@@ -65,6 +66,15 @@ impl From<PyBlockMode> for BlockMode {
     }
 }
 
+impl From<BlockMode> for PyBlockMode {
+    fn from(val: BlockMode) -> Self {
+        match val {
+            BlockMode::Independent => PyBlockMode::Independent,
+            BlockMode::Linked => PyBlockMode::Linked,
+        }
+    }
+}
+
 /// Block size for frame compression.
 /// Attributes:
 ///     Auto: Will detect optimal frame size based on the size of the first write call.
@@ -74,7 +84,7 @@ impl From<PyBlockMode> for BlockMode {
 ///     Max4MB: 4MB block size.
 ///     Max8MB: 8MB block size.
 #[pyclass(eq, eq_int, name = "BlockSize")]
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 enum PyBlockSize {
     /// Will detect optimal frame size based on the size of the first write call
     #[default]
@@ -104,6 +114,32 @@ impl From<PyBlockSize> for BlockSize {
     }
 }
 
+impl From<BlockSize> for PyBlockSize {
+    fn from(val: BlockSize) -> Self {
+        match val {
+            BlockSize::Auto => PyBlockSize::Auto,
+            BlockSize::Max64KB => PyBlockSize::Max64KB,
+            BlockSize::Max256KB => PyBlockSize::Max256KB,
+            BlockSize::Max1MB => PyBlockSize::Max1MB,
+            BlockSize::Max4MB => PyBlockSize::Max4MB,
+            BlockSize::Max8MB => PyBlockSize::Max8MB,
+        }
+    }
+}
+
+impl From<PyBlockSize> for usize {
+    fn from(value: PyBlockSize) -> Self {
+        match value {
+            PyBlockSize::Auto => 0,
+            PyBlockSize::Max64KB => 1024 * 64,
+            PyBlockSize::Max256KB => 1024 * 256,
+            PyBlockSize::Max1MB => 1024 * 1024,
+            PyBlockSize::Max4MB => 1024 * 1024 * 4,
+            PyBlockSize::Max8MB => 1024 * 1024 * 8,
+        }
+    }
+}
+
 /// Information about a compression frame.
 /// Attributes:
 ///     content_size: If set, includes the total uncompressed size of data in the frame.
@@ -114,7 +150,7 @@ impl From<PyBlockSize> for BlockSize {
 ///     legacy_frame: If set, use the legacy frame format.
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[pyclass(name = "FrameInfo", eq)]
-struct PyFramInfo {
+struct PyFrameInfo {
     /// If set, includes the total uncompressed size of data in the frame.
     pub content_size: Option<u64>,
     /// The maximum uncompressed size of each data block.
@@ -137,12 +173,26 @@ struct PyFramInfo {
     pub legacy_frame: bool,
 }
 
-impl From<PyFramInfo> for FrameInfo {
-    fn from(val: PyFramInfo) -> Self {
+impl From<FrameInfo> for PyFrameInfo {
+    fn from(val: FrameInfo) -> Self {
+        PyFrameInfo::new(
+            val.block_size.into(),
+            val.block_mode.into(),
+            Some(val.block_checksums),
+            None,
+            Some(val.content_checksum),
+            val.content_size,
+            Some(val.legacy_frame),
+        )
+    }
+}
+
+impl From<PyFrameInfo> for FrameInfo {
+    fn from(val: PyFrameInfo) -> Self {
         FrameInfo::new()
             .block_checksums(val.block_checksums)
-            .block_mode(val.block_mode.clone().into())
-            .block_size(val.block_size.clone().into())
+            .block_mode(val.block_mode.into())
+            .block_size(val.block_size.into())
             .content_checksum(val.content_checksum)
             .content_size(val.content_size)
             .legacy_frame(val.legacy_frame)
@@ -150,7 +200,7 @@ impl From<PyFramInfo> for FrameInfo {
 }
 
 #[pymethods]
-impl PyFramInfo {
+impl PyFrameInfo {
     #[new]
     #[pyo3(signature = (block_size, block_mode, block_checksums = None, dict_id = None, content_checksum = None, content_size = None, legacy_frame = None))]
     fn new(
@@ -185,7 +235,7 @@ impl PyFramInfo {
     #[staticmethod]
     fn read_header_size(input: &[u8]) -> PyResult<usize> {
         if input.len() < 5 {
-            return Err(LZ4Exception::new_err("Too small to read magic number."));
+            return Err(HeaderError::new_err("Too small to read magic number."));
         }
 
         let mut required = MIN_FRAME_INFO_SIZE;
@@ -202,7 +252,7 @@ impl PyFramInfo {
             return Ok(8);
         }
         if magic_num != LZ4F_MAGIC_NUMBER {
-            return Err(LZ4Exception::new_err("Unexpected magic number."));
+            return Err(HeaderError::new_err("Unexpected magic number."));
         }
 
         if input[4] & FLG_CONTENT_SIZE != 0 {
@@ -215,7 +265,7 @@ impl PyFramInfo {
     }
 
     #[staticmethod]
-    fn read_header_info(mut input: &[u8]) -> PyResult<PyFramInfo> {
+    fn read_header_info(mut input: &[u8]) -> PyResult<PyFrameInfo> {
         let original_input = input;
         // 4 byte Magic
         let magic_num = {
@@ -224,7 +274,7 @@ impl PyFramInfo {
             u32::from_le_bytes(buffer)
         };
         if magic_num == LZ4F_LEGACY_MAGIC_NUMBER {
-            return Ok(PyFramInfo {
+            return Ok(PyFrameInfo {
                 block_size: PyBlockSize::Max8MB,
                 legacy_frame: true,
                 ..Default::default()
@@ -234,12 +284,12 @@ impl PyFramInfo {
             let mut buffer = [0u8; 4];
             input.read_exact(&mut buffer)?;
             let user_data_len = u32::from_le_bytes(buffer);
-            return Err(LZ4Exception::new_err(format!(
+            return Err(HeaderError::new_err(format!(
                 "Within skipable frames range {user_data_len:?}."
             )));
         }
         if magic_num != LZ4F_MAGIC_NUMBER {
-            return Err(LZ4Exception::new_err(format!(
+            return Err(HeaderError::new_err(format!(
                 "Wrong magic number, expected 0x{LZ4F_MAGIC_NUMBER:x}."
             )));
         }
@@ -254,12 +304,12 @@ impl PyFramInfo {
         if flg_byte & FLG_VERSION_MASK != FLG_SUPPORTED_VERSION_BITS {
             // version is always 01
             // return Err(Error::UnsupportedVersion(flg_byte & FLG_VERSION_MASK));
-            return Err(LZ4Exception::new_err("unsupported version"));
+            return Err(HeaderError::new_err("unsupported version"));
         }
 
         if flg_byte & FLG_RESERVED_MASK != 0 || bd_byte & BD_RESERVED_MASK != 0 {
             // return Err(Error::ReservedBitsSet);
-            return Err(LZ4Exception::new_err(
+            return Err(HeaderError::new_err(
                 "flag bytes reserved bit are not supported",
             ));
         }
@@ -274,7 +324,7 @@ impl PyFramInfo {
 
         let block_size = match (bd_byte & BD_BLOCK_SIZE_MASK) >> BD_BLOCK_SIZE_MASK_RSHIFT {
             i @ 0..=3 => {
-                return Err(LZ4Exception::new_err(format!(
+                return Err(HeaderError::new_err(format!(
                     "unsuppored block size number {i:?}"
                 )))
             }
@@ -311,12 +361,12 @@ impl PyFramInfo {
         hasher.write(&original_input[4..original_input.len() - input.len() - 1]);
         let header_hash = (hasher.finish() >> 8) as u8;
         if header_hash != expected_checksum {
-            return Err(LZ4Exception::new_err(format!(
+            return Err(HeaderError::new_err(format!(
                 "Expected checksum {expected_checksum:?}, got {header_hash:?}"
             )));
         }
 
-        Ok(PyFramInfo {
+        Ok(PyFrameInfo {
             content_size,
             block_size,
             block_mode,
@@ -334,12 +384,12 @@ impl PyFramInfo {
 
     #[getter]
     fn get_block_mode(&self) -> PyResult<PyBlockMode> {
-        Ok(self.block_mode.clone())
+        Ok(self.block_mode)
     }
 
     #[getter]
     fn get_block_size(&self) -> PyResult<PyBlockSize> {
-        Ok(self.block_size.clone())
+        Ok(self.block_size)
     }
 
     #[getter]
@@ -425,9 +475,9 @@ fn compress<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes
 
     Ok(PyBytes::new(
         py,
-        &encoder
-            .finish()
-            .map_err(|e| PyIOError::new_err(format!("Failed to finish LZ4 compression: {}", e)))?,
+        &encoder.finish().map_err(|e| {
+            CompressionError::new_err(format!("Failed to finish LZ4 compression: {}", e))
+        })?,
     ))
 }
 
@@ -453,7 +503,7 @@ fn compress_file(filename: PathBuf, input: &[u8]) -> PyResult<()> {
     // flush out buffer.
     encoder
         .flush()
-        .map_err(|e| PyIOError::new_err(format!("Failed to finish LZ4 compression: {}", e)))
+        .map_err(|e| CompressionError::new_err(format!("Failed to finish LZ4 compression: {}", e)))
 }
 
 /// Compresses a buffer of bytes into a file using using the LZ4 frame format, with more control on Frame.
@@ -473,7 +523,7 @@ fn compress_file(filename: PathBuf, input: &[u8]) -> PyResult<()> {
 fn compress_file_with_info(
     filename: PathBuf,
     input: &[u8],
-    info: Option<PyFramInfo>,
+    info: Option<PyFrameInfo>,
 ) -> PyResult<()> {
     let file = std::fs::File::create(&filename)
         .map_err(|_| PyFileExistsError::new_err(format!("{filename:?} already exist.")))?;
@@ -485,7 +535,7 @@ fn compress_file_with_info(
     encoder.write_all(input)?;
     encoder
         .flush()
-        .map_err(|e| PyIOError::new_err(format!("Failed to finish LZ4 compression: {}", e)))
+        .map_err(|e| CompressionError::new_err(format!("Failed to finish LZ4 compression: {}.", e)))
 }
 
 /// Compresses a buffer of bytes into byte buffer using using the LZ4 frame format, with more control on Frame.
@@ -502,18 +552,20 @@ fn compress_file_with_info(
 fn compress_with_info<'py>(
     py: Python<'py>,
     input: &[u8],
-    info: Option<PyFramInfo>,
+    info: Option<PyFrameInfo>,
 ) -> PyResult<PyBound<'py, PyBytes>> {
     let wtr = Vec::with_capacity(input.len());
 
     let info_f: FrameInfo = info.unwrap_or_default().into();
 
     let mut encoder = FrameEncoder::with_frame_info(info_f, wtr);
-    encoder.write_all(input)?;
+    encoder.write_all(input).map_err(|e| {
+        CompressionError::new_err(format!("Failed to LZ4 compression into buffer: {}.", e))
+    })?;
 
-    let output = encoder
-        .finish()
-        .map_err(|e| PyIOError::new_err(format!("Failed to finish LZ4 compression: {}", e)))?;
+    let output = encoder.finish().map_err(|e| {
+        CompressionError::new_err(format!("Failed to finish LZ4 compression: {}.", e))
+    })?;
 
     Ok(PyBytes::new(py, &output))
 }
@@ -531,7 +583,9 @@ fn compress_with_info<'py>(
 fn decompress<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes>> {
     let mut decoder = FrameDecoder::new(input);
     let mut buffer = Vec::new();
-    decoder.read_to_end(&mut buffer)?;
+    decoder.read_to_end(&mut buffer).map_err(|e| {
+        DecompressionError::new_err(format!("Decompression failed while reading: {} ", e))
+    })?;
     Ok(PyBytes::new(py, &buffer))
 }
 
@@ -553,140 +607,259 @@ fn decompress_file(py: Python<'_>, filename: PathBuf) -> PyResult<PyBound<'_, Py
     let mut decoder = FrameDecoder::new(rdr);
 
     let mut buffer = Vec::new();
-    decoder.read_to_end(&mut buffer)?;
+    decoder.read_to_end(&mut buffer).map_err(|e| {
+        DecompressionError::new_err(format!(
+            "Decompression failed while reading {:?}: {}",
+            filename, e
+        ))
+    })?;
     Ok(PyBytes::new(py, &buffer))
 }
 
-struct Open {
-    /// Atomic read only access to file memory.
-    storage: Arc<Mmap>,
-    /// Frame file type info
-    info: PyFramInfo,
-    /// offset **used for release build**
-    #[allow(dead_code)]
-    offset: usize,
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum LZ4FileMode {
+    #[default]
+    READ_BYTES_ONLY_COMPRESSION,
+    WRITE_BYTES,
 }
 
-impl Open {
-    /// instaniate the mmap of ReadOnly file.
-    pub(crate) fn new(filename: PathBuf) -> PyResult<Self> {
-        let file = std::fs::File::open(filename)?;
+impl TryFrom<&str> for LZ4FileMode {
+    type Error = PyErr;
 
-        let storage = Arc::new(unsafe { MmapOptions::new().map_copy_read_only(&file)? });
-        let info = PyFramInfo::read_header_info(&storage)?;
-        let offset = PyFramInfo::read_header_size(&storage)?;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "rb" | "rb|lz4" => Ok(LZ4FileMode::READ_BYTES_ONLY_COMPRESSION),
+            "wb" | "wb|lz4" => Ok(LZ4FileMode::WRITE_BYTES),
+            m => Err(PyValueError::new_err(format!(
+                "{:?} is not a valid file mode",
+                m
+            ))),
+        }
+    }
+}
+
+impl From<LZ4FileMode> for &str {
+    fn from(value: LZ4FileMode) -> Self {
+        match value {
+            LZ4FileMode::READ_BYTES_ONLY_COMPRESSION => "rb",
+            LZ4FileMode::WRITE_BYTES => "wb",
+        }
+    }
+}
+
+/// Context manager that allows us to read, write or chunk blocks.
+///
+/// Example:
+/// ```python
+/// import safelz4
+///
+/// # Reading a file
+/// with safelz4.frame.LZCompressionReader("datafile.lz4") as f:
+///     data = f.decompress()
+///     print(f"Content size: {f.content_size()}")
+///     print(f"Block size: {f.block_size()}")
+///
+/// # Writing a file
+/// with safelz4.open("output.lz4", "wb") as f:
+///     bytes_written = f.write(b"Hello, World!")
+///     print(f"Wrote {bytes_written} bytes")
+/// ```
+#[pyclass]
+#[pyo3(name = "LZCompressionReader")]
+struct PyFrameDecoderReader {
+    /// file header
+    header: PyFrameInfo,
+    /// from file header the offset of the blocks
+    offset: usize,
+    /// inner buffer memeory of compressed bytes
+    inner: Option<Arc<Mmap>>,
+}
+
+impl PyFrameDecoderReader {
+    /// Atomic reference to the memory map allowing for fast read only access  
+    #[allow(dead_code)]
+    pub(crate) fn inner(&self) -> PyResult<Arc<Mmap>> {
+        match &self.inner {
+            Some(arc) => Ok(Arc::clone(arc)), // Explicit Arc::clone
+            None => Err(ReadError::new_err("File is closed".to_string())),
+        }
+    }
+}
+
+#[pymethods]
+impl PyFrameDecoderReader {
+    #[new]
+    #[pyo3(signature = (filename))]
+    fn new(filename: PathBuf) -> PyResult<Self> {
+        let file = File::open(&filename).map_err(|e| {
+            PyIOError::new_err(format!("Failed to open file {:?}: {}", filename, e))
+        })?;
+
+        let inner = Arc::new(unsafe {
+            MmapOptions::new()
+                .map_copy_read_only(&file)
+                .map_err(|e| PyIOError::new_err(format!("Failed to mmap file: {}", e)))?
+        });
+
+        let header = PyFrameInfo::read_header_info(&inner)?;
+        let offset = PyFrameInfo::read_header_size(&inner)?;
+
+        // let blocks =
+
         Ok(Self {
-            storage,
-            info,
+            header,
             offset,
+            inner: Some(inner),
+            // blocks : std::collections::LinkedList::new()
         })
     }
 
-    /// helper of [`open_frame`] to access the FrameInfo of frame file.
-    pub(crate) fn info(&self) -> PyFramInfo {
-        self.info.clone()
+    pub fn offset(&self) -> PyResult<usize> {
+        Ok(self.offset)
     }
 
-    /// deompression output size for allocation of memmory
-    pub(crate) fn content_size(&self) -> Option<u64> {
-        self.info.content_size
+    pub fn content_size(&self) -> PyResult<Option<u64>> {
+        self.header.get_content_size()
     }
 
-    pub(crate) fn block_size(&self) -> PyBlockSize {
-        self.info.block_size.clone()
+    pub fn block_size(&self) -> PyResult<PyBlockSize> {
+        self.header.get_block_size()
     }
 
-    /// decompress the the bytes within the Read only [`Mmap`]
-    pub(crate) fn decompress<'py>(&self, py: Python<'py>) -> PyResult<PyBound<'py, PyBytes>> {
-        decompress(py, &self.storage)
+    pub fn block_checksum(&self) -> PyResult<bool> {
+        self.header.get_block_checksums()
+    }
+
+    pub fn frame_info(&self) -> PyResult<PyFrameInfo> {
+        Ok(self.header.clone())
+    }
+
+    pub fn get_block<'py>(&self, _py: Python<'py>, _idx: usize) -> PyResult<PyBound<'py, PyBytes>> {
+        unimplemented!()
+    }
+
+    pub fn decompress<'py>(&self, py: Python<'py>) -> PyResult<PyBound<'py, PyBytes>> {
+        let mut output = Vec::with_capacity(self.header.content_size.unwrap_or(65536) as usize);
+        let buffer = &self.inner()?[..];
+        let mut decoder = FrameDecoder::new(buffer);
+        decoder.read_to_end(&mut output).map_err(|e| {
+            DecompressionError::new_err(format!("Decompression failed while reading: {}", e))
+        })?;
+        Ok(PyBytes::new(py, &output))
+    }
+
+    pub fn __enter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    pub fn __exit__(&mut self, _exc_type: PyObject, _exc_value: PyObject, _traceback: PyObject) {
+        // when mmap goes out of scope, rust will drop mmap
+        self.inner = None;
     }
 }
 
-/// Context manager that allows us to decompresses a buffer of bytes using thex LZ4 frame format.
-///
-/// Example:
-/// ```ignore
-/// output = None
-/// with open_frame("datafile") as f:
-///     output = f.decompress()
-///
-/// print(output)
-/// ```
-///
 #[pyclass]
-#[allow(non_camel_case_types)]
-struct open_frame {
-    inner: Option<Open>,
+#[pyo3(name = "LZCompressionWriter")]
+struct PyFrameEncoderWriter {
+    offset: usize,
+    inner: Option<FrameEncoder<BufWriter<File>>>,
 }
 
-impl open_frame {
-    /// helper that reduces the syntax in case of None open_frame
-    pub(crate) fn inner(&self) -> PyResult<&Open> {
+impl PyFrameEncoderWriter {
+    pub(crate) fn inner(&mut self) -> PyResult<&mut FrameEncoder<BufWriter<File>>> {
         let inner = self
             .inner
-            .as_ref()
+            .as_mut()
             .ok_or_else(|| LZ4Exception::new_err("File is closed".to_string()))?;
         Ok(inner)
     }
 }
 
 #[pymethods]
-impl open_frame {
-    /// Initialize the open_frame context manager with a filename.
+impl PyFrameEncoderWriter {
     #[new]
-    #[pyo3(signature = (filename))]
-    fn new(filename: PathBuf) -> PyResult<Self> {
-        let inner = Some(Open::new(filename)?);
-        Ok(Self { inner })
+    #[pyo3(signature = (filename, info = None))]
+    fn new(filename: PathBuf, info: Option<PyFrameInfo>) -> PyResult<Self> {
+        let file = File::create(&filename).map_err(|e| {
+            PyIOError::new_err(format!("Failed to create file {:?}: {}", filename, e))
+        })?;
+
+        let wtr = BufWriter::new(file);
+
+        let frame_info: FrameInfo = info.unwrap_or_default().into();
+        let inner = Some(FrameEncoder::with_frame_info(frame_info, wtr));
+
+        Ok(Self { offset: 0, inner })
     }
 
-    /// Return the frameinfo of the compression file
-    /// Returns:
-    ///     `FrameInfo`:
-    ///         The freeform FrameInfo.
-    pub fn info(&self) -> PyResult<PyFramInfo> {
-        Ok(self.inner()?.info())
+    fn offset(&self) -> PyResult<usize> {
+        Ok(self.offset)
     }
 
-    /// Return the content size of the frame
-    /// Returns:
-    ///     `int`: size of each.
-    pub fn content_size(&self) -> PyResult<Option<u64>> {
-        Ok(self.inner()?.content_size())
+    fn frame_info(&mut self) -> PyResult<PyFrameInfo> {
+        Ok(self.inner()?.frame_info().clone().into())
     }
 
-    /// Returns the decompress block size of each individual block
-    /// Returns
-    ///     `BlockSize`: size for frame compression.
-    pub fn block_size(&self) -> PyResult<PyBlockSize> {
-        Ok(self.inner()?.block_size())
+    pub fn write(&mut self, input: &[u8]) -> PyResult<usize> {
+        let offset = self
+            .inner()?
+            .write(input)
+            .map_err(|_| CompressionError::new_err("Could not write into file"))?;
+        self.offset += offset;
+        Ok(offset)
     }
 
-    /// Decompress the whole frame file
-    ///
-    /// Returns:
-    ///     `bytes`:
-    ///         The decompressed (original) representation of the bytes within the file.
-    ///
-    pub fn decompress<'py>(&self, py: Python<'py>) -> PyResult<PyBound<'py, PyBytes>> {
-        self.inner()?.decompress(py)
+    pub fn flush(&mut self) -> PyResult<()> {
+        self.inner()?
+            .flush()
+            .map_err(|_| PyIOError::new_err("Could not flush file."))
     }
 
-    /// Enter the context manager and return self.
+    pub fn close(&mut self) -> PyResult<()> {
+        self.flush()?;
+        self.inner = None;
+        Ok(())
+    }
+
     pub fn __enter__(slf: Py<Self>) -> Py<Self> {
         slf
     }
 
-    /// Exit the context manager and clean up resources.
-    pub fn __exit__(&mut self, _exc_type: PyObject, _exc_value: PyObject, _traceback: PyObject) {
-        self.inner = None;
+    pub fn __exit__(
+        &mut self,
+        _exc_type: PyObject,
+        _exc_value: PyObject,
+        _traceback: PyObject,
+    ) -> PyResult<()> {
+        self.close()
+    }
+}
+/// Check if a file is a valid LZ4 Frame file by reading its header
+///
+/// Args:
+///     filename (`str`): Path to check
+///
+/// Returns:
+///     (`bool)`: True if the file appears to be a valid LZ4 file
+#[pyfunction]
+pub fn is_framefile(filename: PathBuf) -> PyResult<bool> {
+    match File::open(&filename) {
+        Ok(file) => match unsafe { MmapOptions::new().map_copy_read_only(&file) } {
+            Ok(mmap) => match PyFrameInfo::read_header_info(&mmap) {
+                Ok(_) => Ok(true),
+                Err(_) => Ok(false),
+            },
+            Err(_) => Ok(false),
+        },
+        Err(_) => Ok(false),
     }
 }
 
 /// register frame module handles which handles Frame de/compression of frames.
 ///
 /// ```ignore
-/// from .safelz4_rs import _frame
+/// from ._safelz4_rs import _frame
 ///
 /// plaintext = b"eeeeeeee Hello world this is an example of plaintext being compressed eeeeeeeeeeeeeee"
 /// output = _frame.compress(plaintext)
@@ -702,12 +875,16 @@ pub(crate) fn register_frame_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     frame_m.add_function(wrap_pyfunction!(compress_with_info, &frame_m)?)?;
     frame_m.add_function(wrap_pyfunction!(decompress_file, &frame_m)?)?;
     frame_m.add_function(wrap_pyfunction!(decompress, &frame_m)?)?;
+    frame_m.add_function(wrap_pyfunction!(is_framefile, &frame_m)?)?;
 
     // class objects
-    frame_m.add_class::<PyFramInfo>()?;
+    frame_m.add_class::<PyFrameInfo>()?;
     frame_m.add_class::<PyBlockMode>()?;
     frame_m.add_class::<PyBlockSize>()?;
-    frame_m.add_class::<open_frame>()?;
+
+    //
+    frame_m.add_class::<PyFrameDecoderReader>()?;
+    frame_m.add_class::<PyFrameEncoderWriter>()?;
 
     // const number for reading frame blocks
     frame_m.add("FLG_RESERVED_MASK", FLG_RESERVED_MASK)?;

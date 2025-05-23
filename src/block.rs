@@ -1,4 +1,4 @@
-use super::error::LZ4Exception;
+use super::error::LZ4BlockError;
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 use pyo3::Bound as PyBound;
@@ -63,7 +63,7 @@ fn compress_prepend_size<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound
 fn compress_into(input: &[u8], output: PyBound<'_, PyByteArray>) -> PyResult<usize> {
     let buffer = unsafe { output.as_bytes_mut() };
     let size = lz4_flex::compress_into(input, buffer)
-        .map_err(|e| LZ4Exception::new_err(format!("{e}")))?;
+        .map_err(|e| LZ4BlockError::new_err(format!("{e}")))?;
 
     Ok(size)
 }
@@ -72,8 +72,8 @@ fn compress_into(input: &[u8], output: PyBound<'_, PyByteArray>) -> PyResult<usi
 /// Args:
 ///     input (`bytes`):
 ///         fixed set of bytes to be compressed.
-///     dictionary (`bytes`):
-///         Dictionary used for compression.
+///     ext_dict (`bytes`):
+///         A dictionary of bytes used for compression input.
 /// Returns:
 ///     `bytes`: fixed set of bytes to be decompressed.
 #[pyfunction]
@@ -84,6 +84,26 @@ fn compress_with_dict<'py>(
     ext_dict: &[u8],
 ) -> PyResult<PyBound<'py, PyBytes>> {
     let output = lz4_flex::block::compress_with_dict(input, ext_dict);
+    Ok(PyBytes::new(py, &output))
+}
+
+/// Compress input bytes using the proved dict of bytes, size is pre-appended.
+///
+/// Args:
+///     input (`bytes`):
+///         fixed set of bytes to be compressed.
+///     ext_dict (`bytes`):
+///         Dictionary used for compress.
+/// Returns:
+///     (`bytes`): compressed data.
+#[pyfunction]
+#[pyo3(signature = (input, ext_dict))]
+fn compress_prepend_size_with_dict<'py>(
+    py: Python<'py>,
+    input: &[u8],
+    ext_dict: &[u8],
+) -> PyResult<PyBound<'py, PyBytes>> {
+    let output = lz4_flex::block::compress_prepend_size_with_dict(input, ext_dict);
     Ok(PyBytes::new(py, &output))
 }
 
@@ -102,7 +122,7 @@ fn decompress_into(input: &[u8], output: PyBound<'_, PyByteArray>) -> PyResult<u
     let buffer = unsafe { output.as_bytes_mut() };
 
     let size = lz4_flex::decompress_into(input, buffer)
-        .map_err(|e| LZ4Exception::new_err(format!("decompression error {e:?}")))?;
+        .map_err(|e| LZ4BlockError::new_err(format!("{e}")))?;
     Ok(size)
 }
 
@@ -122,7 +142,7 @@ fn decompress<'py>(
     min_size: usize,
 ) -> PyResult<PyBound<'py, PyBytes>> {
     let output = lz4_flex::decompress(input, min_size)
-        .map_err(|e| LZ4Exception::new_err(format!("{e:?} has occued")))?;
+        .map_err(|e| LZ4BlockError::new_err(format!("{e}")))?;
     Ok(PyBytes::new(py, &output))
 }
 
@@ -142,7 +162,7 @@ fn decompress_size_prepended<'py>(
     input: &[u8],
 ) -> PyResult<PyBound<'py, PyBytes>> {
     let output = lz4_flex::decompress_size_prepended(input)
-        .map_err(|e| LZ4Exception::new_err(format!("decompression error {e:?}")))?;
+        .map_err(|e| LZ4BlockError::new_err(format!("{e}")))?;
     let pybytes = PyBytes::new(py, &output);
     Ok(pybytes)
 }
@@ -151,43 +171,77 @@ fn decompress_size_prepended<'py>(
 /// Args:
 ///     input (`bytes`):
 ///         fixed set of bytes to be decompressed.
+///     min_size (`int`):
+///         minimum possible size of uncompressed bytes.
 ///     ext_dict (`bytes`):
 ///         Dictionary used for decompression.
 ///
 /// Returns:
-///     `bytes`: Decompressed data.
+///     (`bytes`): Decompressed data.
+#[pyfunction]
+#[pyo3(signature = (input, min_size, ext_dict))]
+fn decompress_with_dict<'py>(
+    py: Python<'py>,
+    input: &[u8],
+    min_size: usize,
+    ext_dict: &[u8],
+) -> PyResult<PyBound<'py, PyBytes>> {
+    let output = lz4_flex::block::decompress_with_dict(input, min_size, ext_dict)
+        .map_err(|e| LZ4BlockError::new_err(format!("{e}")))?;
+    Ok(PyBytes::new(py, &output))
+}
+
+/// Decompress input bytes using a user-provided dictionary of bytes, size is already pre-appended.
+/// Args:
+///     input (`bytes`):
+///         fixed set of bytes to be decompressed.
+///     ext_dict (`bytes`):
+///         Dictionary used for decompression.
+///
+/// Returns:
+///     (`bytes`): Decompressed data.
 #[pyfunction]
 #[pyo3(signature = (input, ext_dict))]
-fn decompress_with_dict<'py>(
+fn decompress_prepend_size_with_dict<'py>(
     py: Python<'py>,
     input: &[u8],
     ext_dict: &[u8],
 ) -> PyResult<PyBound<'py, PyBytes>> {
     let output = lz4_flex::block::decompress_size_prepended_with_dict(input, ext_dict)
-        .map_err(|e| LZ4Exception::new_err(format!("decompression error: {e:?}")))?;
+        .map_err(|e| LZ4BlockError::new_err(format!("{e}")))?;
     Ok(PyBytes::new(py, &output))
 }
 
 /// rust block module handles over all structure of the compression format.
 ///
 /// ```ignore
-/// from .safelz4_rs import _block
+/// from ._safelz4_rs import _block
 ///
-/// plaintext = b"eeeeeeee Hello world this is an example of plaintext being compressed eeeeeeeeeeeeeee"
+/// plaintext = b"An iterator that knows its exact length.\n        Many Iterators don\'t know how many times they will iterate, but some do."
 /// output = _block.compresss(plaintext)
 /// output = _block.decompress(output)
 /// ```
 pub(crate) fn register_block_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let block_m = PyModule::new(m.py(), "_block")?;
 
+    // block compression
     block_m.add_function(wrap_pyfunction!(compress, &block_m)?)?;
     block_m.add_function(wrap_pyfunction!(compress_into, &block_m)?)?;
     block_m.add_function(wrap_pyfunction!(compress_prepend_size, &block_m)?)?;
     block_m.add_function(wrap_pyfunction!(compress_with_dict, &block_m)?)?;
+    block_m.add_function(wrap_pyfunction!(compress_prepend_size_with_dict, &block_m)?)?;
+
+    // block decompression
     block_m.add_function(wrap_pyfunction!(decompress, &block_m)?)?;
     block_m.add_function(wrap_pyfunction!(decompress_into, &block_m)?)?;
     block_m.add_function(wrap_pyfunction!(decompress_size_prepended, &block_m)?)?;
     block_m.add_function(wrap_pyfunction!(decompress_with_dict, &block_m)?)?;
+    block_m.add_function(wrap_pyfunction!(
+        decompress_prepend_size_with_dict,
+        &block_m
+    )?)?;
+
+    // utility
     block_m.add_function(wrap_pyfunction!(get_maximum_output_size, &block_m)?)?;
 
     m.add_submodule(&block_m)?;
