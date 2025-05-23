@@ -18,12 +18,12 @@ help:
 	@echo "  flake     - Run flake8 lint checking on source files (ignore: E302,E704,E301)"
 	@echo "  fuzz	   - Run current fuzz target tests. e.g make fuzz TARGET=fuzz_roundtrip"
 	@echo "  lint      - Run Black lint check on all source files"
-	@echo "  check     - Run Black lint check without modifying files"
+	@echo "  check     - Run Black, flake8, and rustfmt lint check without modifying files"
 	@echo "  format    - Format all source files with Black"
 	@echo "  format-dir DIR=path/to/dir - Format files in specific directory"
 
 clean:
-	rm -rf build/ dist/ *.egg-info/ .pytest_cache/ .coverage htmlcov/ .eggs/
+	rm -rf build/ dist/ *.egg-info/ .pytest_cache/ .coverage htmlcov/ .eggs/ target/
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 
@@ -33,14 +33,17 @@ test:
 
 flake:
 	flake8 py/safelz4/ -v --max-line-length 80
-	flake8 py/safelz4/_frame/__init__.pyi -v --max-line-length 80 --ignore=E302,E704,E301
-	flake8 py/safelz4/_block/__init__.pyi -v --max-line-length 80 --ignore=E302,E704,E301
+	flake8 py/safelz4/frame/__init__.pyi -v --max-line-length 80 --ignore=E302,E704,E301,F811
+	flake8 py/safelz4/block/__init__.pyi -v --max-line-length 80 --ignore=E302,E704,E301
 
 lint: 
 	$(BLACK) $(BLACK_OPTS) $(SRC_DIRS)
 
-check:
+check: flake
 	$(BLACK) $(BLACK_OPTS) --check $(SRC_DIRS)
+	cargo clippy -V
+	cargo fmt -- --check -v
+	
 
 format: lint
 
