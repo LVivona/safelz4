@@ -37,7 +37,7 @@ pyo3::create_exception!(
     safelz4,
     DecompressionError,
     LZ4Exception,
-    "Custom error is raised when a decompression method is not supported or when the data cannot be encoded properly."
+    "Custom error is raised when a decompression method is not supported or when the data cannot be decoded properly."
 );
 
 pyo3::create_exception!(
