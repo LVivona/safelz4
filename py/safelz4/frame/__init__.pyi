@@ -257,12 +257,13 @@ def compress_with_info(
     ...
 
 @overload
-def is_framefile(name: Union[os.PathLike, str]):
+def is_framefile(name: Union[os.PathLike, str]) -> bool:
     os.PathLike, str
-    """Check if a file is a valid LZ4 Frame file by reading its header
+    """
+    Check if a file is a valid LZ4 Frame file by reading its header
 
     Args:
-        filename (`str` or `os.PathLike`): 
+        name (`str` or `os.PathLike`):
             Path to the LZ4 frame file.
 
     Returns:
@@ -270,9 +271,33 @@ def is_framefile(name: Union[os.PathLike, str]):
     """
     ...
 
+@overload
+def is_framefile(name: bytes) -> bool:
+    """
+    Check if a file is a valid LZ4 Frame file by reading its header
+
+    Args:
+        name (`bytes`):
+            Abritary fixed set of bytes.
+
+    Returns:
+        (`bool)`: true if the file appears to be a valid LZ4 file
+    """
+    ...
 
 @overload
-def is_framefile(name: Union[os.PathLike, str, bytes, io.BufferedReader]):...
+def is_framefile(name: io.BufferedReader) -> bool:
+    """
+    Check if a file is a valid LZ4 Frame file by reading its header
+
+    Args:
+        name (`io.BufferedReader`):
+            Io reader to which we can read fix sized bytes.
+
+    Returns:
+        (`bool)`: true if the file appears to be a valid LZ4 file
+    """
+    ...
 
 def decompress_prepend_size_with_dict(input: bytes, ext_dict: bytes) -> bytes:
     """
@@ -299,8 +324,8 @@ class LZCompressionReader:
     Raises:
         (`IOError`): If the file cannot be opened or memory-mapped.
         (`ReadError`): If reading invalid memeory in the mmap.
-        (`HeaderError`): If reading file header fails. 
-        (`DecompressionError`): If decompressing 
+        (`HeaderError`): If reading file header fails.
+        (`DecompressionError`): If decompressing
 
     """
 
@@ -393,7 +418,9 @@ class LZCompressionWriter:
         IOError: If the file cannot be opened for writing.
     """
 
-    def __new__(self, filename: str, info: Optional[FrameInfo] = None) -> Self: ...
+    def __new__(
+        self, filename: str, info: Optional[FrameInfo] = None
+    ) -> Self: ...
     def offset(self) -> int:
         """
         Returns the current write offset (total bytes written).

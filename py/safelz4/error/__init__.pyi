@@ -18,6 +18,11 @@ class CompressionError(LZ4Exception):
 
     ...
 
+class DeompressionError(LZ4Exception):
+    """Raised when decompression method is not supported or when the data cannot be decoded properly."""
+
+    ...
+
 class LZ4BlockError(LZ4Exception):
     """Raise when block compression is invalid"""
 

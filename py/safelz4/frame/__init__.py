@@ -1,7 +1,8 @@
 import os
 import io
 from typing import Union, Optional, Literal
-from safelz4._safelz4_rs import _frame, error
+from safelz4.error import LZ4Exception
+from safelz4._safelz4_rs import _frame
 
 __all__ = [
     "FrameInfo",
@@ -26,7 +27,7 @@ FrameInfo = _frame.FrameInfo
 LZCompressionWriter = _frame.LZCompressionWriter
 LZCompressionReader = _frame.LZCompressionReader
 
-# Compression functions 
+# Compression functions
 compress = _frame.compress
 compress_file = _frame.compress_file
 compress_file_with_info = _frame.compress_file_with_info
@@ -87,7 +88,7 @@ def is_framefile(
         else:  # treat as path
             return _frame.is_framefile(name)
 
-    except error.LZ4Exception:
+    except LZ4Exception:
         return False
 
 
