@@ -1,7 +1,7 @@
 import os
 import pyperf
 import safelz4
-import safelz4._frame
+import safelz4.frame
 
 directory = os.path.dirname(os.path.abspath(__file__))
 samples = os.path.join(directory, "samples")
@@ -31,9 +31,9 @@ def bench_func(name: str):
     with open(filename, "rb") as f:
         buffer = f.read(-1)
     
-    py_runner.bench_func(f"compress_{name}", safelz4._frame.compress, *[buffer])
+    py_runner.bench_func(f"compress_{name}", safelz4.frame.compress, *[buffer])
     output = safelz4.compress(buffer)
-    py_runner.bench_func(f"decompress_{name}", safelz4._frame.decompress, *[output])
+    py_runner.bench_func(f"decompress_{name}", safelz4.frame.decompress, *[output])
     del output
     del buffer
 
