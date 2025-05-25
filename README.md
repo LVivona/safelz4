@@ -12,7 +12,7 @@
     <a href="https://pypi.org/project/safelz4/"><img alt="Python Version" src="https://img.shields.io/pypi/pyversions/safelz4?logo=python"></a>
 </p>
 
-Rust binding into python of the lz4 library [lz4_flex](https://github.com/PSeitz/lz4_flex) The Fastest LZ4 implementation in Rust.
+Python bindings for [lz4_flex](https://github.com/PSeitz/lz4_flex), the fastest pure-Rust implementation of the LZ4 compression algorithm.
 
 
 ## Installation
@@ -34,9 +34,10 @@ For the sources, you need Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 # Make sure it's up to date and using stable channel
 rustup update
-git clone https://github.com/LVivona/safelz4
+git clone https://github.com/LVivona/safelz4.git
 cd safelz4
 pip install setuptools_rust
+pip install maturin
 # install
 pip install -e .
 ```
@@ -52,7 +53,7 @@ pip install -e .
   </picture>
 </p>
 
-The block format is only valid for smaller data chunks as block is de/compressed in memory. For larger data use the frame format, which consists of multiple blocks. [specs](https://github.com/lz4/lz4/blob/dev/doc/lz4_Block_format.md)
+The block format is suitable only for smaller chunks of data, as each block must be fully compressed or decompressed in memory. For larger data sequences, the frame format should be used instead, as it supports streaming and includes metadata for better handling of large-byte sequences. [specs](https://github.com/lz4/lz4/blob/dev/doc/lz4_Block_format.md)
 
 ```python
 import os
@@ -102,6 +103,6 @@ with safelz4.open("dickens.lz4", "rb") as f:
 
 ```
 
-### Licence
+## Licence
 
 [MIT License](https://github.com/LVivona/safelz4/blob/main/LICENCE.md)
