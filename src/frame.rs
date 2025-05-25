@@ -1039,13 +1039,17 @@ impl PyFrameDecoderReader {
         }
     }
 
+    fn close(&mut self) {
+        self.inner = None
+    }
+
     pub fn __enter__(slf: Py<Self>) -> Py<Self> {
         slf
     }
 
     pub fn __exit__(&mut self, _exc_type: PyObject, _exc_value: PyObject, _traceback: PyObject) {
         // when mmap goes out of scope, rust will drop mmap
-        self.inner = None;
+        self.close();
     }
 }
 
@@ -1180,7 +1184,7 @@ pub(crate) fn register_frame_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     frame_m.add_class::<PyBlockMode>()?;
     frame_m.add_class::<PyBlockSize>()?;
 
-    //
+    // IO Read/Write
     frame_m.add_class::<PyFrameDecoderReader>()?;
     frame_m.add_class::<PyFrameEncoderWriter>()?;
 

@@ -38,6 +38,10 @@ class BlockSize(IntEnum):
     Max4MB = 7
     Max8MB = 8
 
+    @staticmethod
+    def from_buf_length(buf_len: int): ...
+    def get_size(self) -> int: ...
+
 class FrameInfo:
     """
     Information about a compression frame.
@@ -378,10 +382,10 @@ class LZCompressionReader:
         when working with framed compression formats such as LZ4.
 
         Args:
-            size (int): The number of bytes to return after decompression.
+            size (`int`): The number of bytes to return after decompression.
 
         Returns:
-            bytes: A decompressed byte string of the requested size.
+            (`bytes`): A decompressed byte string of the requested size.
 
         Raises:
             ReadError:
@@ -395,6 +399,7 @@ class LZCompressionReader:
                 indicating potential data corruption.
         """
         ...
+    def close(self) -> None: ...
     def __enter__(self) -> Self:
         """
         Context manager entry — returns self.
@@ -442,10 +447,10 @@ class LZCompressionWriter:
         Writes bytes into the LZ4 frame.
 
         Args:
-            input (bytes): Input data to compress and write.
+            input (`bytes`): Input data to compress and write.
 
         Returns:
-            int: Number of bytes written.
+            (`int`): Number of bytes written.
 
         Raises:
             CompressionError: If compression or writing fails.
@@ -489,11 +494,16 @@ class LZCompressionWriter:
 @overload
 def open(
     filename: Union[str, os.PathLike],
+    mode: Optional[Literal["rb", "rb|lz4", "wb", "wb|lz4"]] = None,
+) -> Union[LZCompressionReader, LZCompressionWriter]: ...
+@overload
+def open(
+    filename: Union[str, os.PathLike],
     mode: Optional[Literal["wb", "wb|lz4"]] = None,
     info: Optional[FrameInfo] = None,
-) -> Union[LZCompressionWriter]: ...
+) -> LZCompressionWriter: ...
 @overload
 def open(
     filename: Union[str, os.PathLike],
     mode: Optional[Literal["rb", "rb|lz4"]] = None,
-) -> Union[LZCompressionReader]: ...
+) -> LZCompressionReader: ...

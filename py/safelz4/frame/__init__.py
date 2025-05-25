@@ -98,7 +98,7 @@ def open(
     info: Optional[_frame.FrameInfo] = None,
 ) -> Union[_frame.LZCompressionReader, _frame.LZCompressionWriter]:
     """
-    Returns a context manager for reading or writing lz4 frames to file.
+    Returns a context manager for reading or writing lz4 frames.
 
     Example:
 
@@ -121,6 +121,29 @@ def open(
                 file.write(content)
     ```
 
+    OR
+
+    ```
+    import safelz4
+
+    chunk_size = 1024
+    with safelz4.open("datafile.lz4", "rb") as file:
+        while content := f.read(chunk_size):
+            print(content)
+    ```
+
+    OR
+
+    ```
+    import safelz4
+
+    chunk_size = 1024
+    FILE = safelz4.open("datafile.lz4", "rb")
+
+    while content := FILE.read(chunk_size):
+        print(content)
+    FILE.close()
+    ```
     """
     if mode is None:
         return _frame.LZCompressionReader(filename)
