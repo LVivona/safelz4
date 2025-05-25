@@ -43,33 +43,65 @@ pip install -e .
 
 ## Getting Started
 
+### Block Format
+
+
+<p align="center">
+  <picture>
+    <img alt="safelz4 block" src="https://raw.githubusercontent.com/LVivona/safelz4/refs/heads/main/.github/assets/block.png" style="max-width: 95%;">
+  </picture>
+</p>
+
+The block format is only valid for smaller data chunks as block is de/compressed in memory. For larger data use the frame format, which consists of multiple blocks. [specs](https://github.com/lz4/lz4/blob/dev/doc/lz4_Block_format.md)
+
+```python
+import os
+import sys
+from typing import Union, Generator
+from safelz4.block import compress_prepend_size, decompress_size_prepended
+
+def chunk_blocks(filename : Union[os.PathLike, str], chunk_size : int = 1048576) -> Generator[bytes, None, None]:
+    """compress read bytes into chunks blocks"""
+    with open(filename, "rb") as f:
+        while content := f.read(chunk_size):
+            buffer = compress_prepend_size(content)
+            yield buffer
+
+# 1 Mb chunck
+blocks = chunk_blocks("dickens.txt")
+
+for block in blocks:
+    output = decompress_size_prepended(buffer)
+    sys.stdout.write(output.decode("utf-8"))
+```
 
 ### Frame Format
+
+<p align="center">
+  <picture>
+    <img alt="safelz4 frame" src="https://raw.githubusercontent.com/LVivona/safelz4/refs/heads/main/.github/assets/frame.png" style="max-width: 95%;">
+  </picture>
+</p>
+
+
+Frames are containers that encapsulate a set of compressed blocks. Information about the blocks is stored both in the frame header and within the blocks themselves. Read more within the [specs](https://github.com/lz4/lz4/blob/dev/doc/lz4_Frame_format.md)
+
+
 ```python
-from safelz4 import compress_file, open_frame
+import safelz4
 
 buffer = None
-with open("dickens.txt", "r") as file:
-    buffer = file.read(-1).encode("utf-8")
+with open("dickens.txt", "rb") as file:
+    buffer = file.read(-1)
+    safelz4.compress_file("dickens.lz4", buffer)
 
-compress_file("dickens.lz4", buffer)
 
-output = None
-with open_frame("dickens.lz4") as f:
-   output = f.decompress()
+with safelz4.open("dickens.lz4", "rb") as f:
+   while content := f.read(100):
+      print(content.decode("utf-8"))
 
 ```
 
-### Block Format
-```python
-from safelz4.block import compress_prepend_size, 
+### Licence
 
-buffer = None
-with open("dickens.txt", "r") as file:
-    input_b = file.read(-1).encode("utf-8")
-    buffer = compress_prepend_size(input_b)
-
-output = decompress_size_prepended(buffer)
-```
-
-### Overview
+[MIT License](https://github.com/LVivona/safelz4/blob/main/LICENCE.md)
