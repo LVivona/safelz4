@@ -17,7 +17,11 @@ use pyo3::Bound as PyBound;
 
 use lz4_flex::frame::{BlockMode, BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
 
-use crate::error::{CompressionError, DecompressionError, HeaderError, LZ4Exception, ReadError};
+use crate::error::{
+    CompressionError, DecompressionError, HeaderError, LZ4BlockError, LZ4Exception, ReadError,
+};
+
+const WINDOW_SIZE: usize = 65536;
 
 const FLG_RESERVED_MASK: u8 = 0b00000010;
 const FLG_VERSION_MASK: u8 = 0b11000000;
@@ -101,6 +105,35 @@ enum PyBlockSize {
     Max8MB = 8,
 }
 
+#[pymethods]
+impl PyBlockSize {
+    #[staticmethod]
+    pub fn from_buf_length(buf_len: usize) -> Self {
+        let mut blocksize = PyBlockSize::Max4MB;
+
+        for candidate in [PyBlockSize::Max256KB, PyBlockSize::Max64KB] {
+            if buf_len > candidate.get_size().unwrap() {
+                return blocksize;
+            }
+            blocksize = candidate;
+        }
+        PyBlockSize::Max64KB
+    }
+
+    pub fn get_size(&self) -> PyResult<usize> {
+        match self {
+            PyBlockSize::Auto => Err(LZ4Exception::new_err(
+                "Auto does not have a predetermined size",
+            )),
+            PyBlockSize::Max64KB => Ok(64 * 1024),
+            PyBlockSize::Max256KB => Ok(256 * 1024),
+            PyBlockSize::Max1MB => Ok(1024 * 1024),
+            PyBlockSize::Max4MB => Ok(4 * 1024 * 1024),
+            PyBlockSize::Max8MB => Ok(8 * 1024 * 1024),
+        }
+    }
+}
+
 impl From<PyBlockSize> for BlockSize {
     fn from(val: PyBlockSize) -> Self {
         match val {
@@ -127,19 +160,6 @@ impl From<BlockSize> for PyBlockSize {
     }
 }
 
-impl From<PyBlockSize> for usize {
-    fn from(value: PyBlockSize) -> Self {
-        match value {
-            PyBlockSize::Auto => 0,
-            PyBlockSize::Max64KB => 1024 * 64,
-            PyBlockSize::Max256KB => 1024 * 256,
-            PyBlockSize::Max1MB => 1024 * 1024,
-            PyBlockSize::Max4MB => 1024 * 1024 * 4,
-            PyBlockSize::Max8MB => 1024 * 1024 * 8,
-        }
-    }
-}
-
 /// Information about a compression frame.
 /// Attributes:
 ///     content_size: If set, includes the total uncompressed size of data in the frame.
@@ -148,7 +168,7 @@ impl From<PyBlockSize> for usize {
 ///     block_checksums: If set, includes a checksum for each data block in the frame.
 ///     content_checksum: If set, includes a content checksum to verify that the full frame contents have been decoded correctly.
 ///     legacy_frame: If set, use the legacy frame format.
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 #[pyclass(name = "FrameInfo", eq)]
 struct PyFrameInfo {
     /// If set, includes the total uncompressed size of data in the frame.
@@ -648,6 +668,26 @@ impl From<LZ4FileMode> for &str {
     }
 }
 
+enum BlockInfo {
+    Uncompressed(u32),
+    Compressed(u32),
+    Eof,
+}
+
+impl BlockInfo {
+    pub(crate) fn read(input: &[u8]) -> PyResult<Self> {
+        let array = [input[0], input[1], input[2], input[3]];
+        let size = u32::from_le_bytes(array);
+        if size == 0 {
+            Ok(BlockInfo::Eof)
+        } else if size & BLOCK_UNCOMPRESSED_SIZE_BIT != 0 {
+            Ok(BlockInfo::Uncompressed(size & !BLOCK_UNCOMPRESSED_SIZE_BIT))
+        } else {
+            Ok(BlockInfo::Compressed(size))
+        }
+    }
+}
+
 /// Context manager that allows us to read, write or chunk blocks.
 ///
 /// Example:
@@ -669,21 +709,224 @@ impl From<LZ4FileMode> for &str {
 #[pyo3(name = "LZCompressionReader")]
 struct PyFrameDecoderReader {
     /// file header
-    header: PyFrameInfo,
+    frame_info: PyFrameInfo,
     /// from file header the offset of the blocks
     offset: usize,
+    // moving counter of the current block
+    current_block: usize,
+    /// Current block the reader is at
+    content_len: u64,
+    /// The compressed bytes buffer, taken from the underlying reader.
+    src: Vec<u8>,
+    /// The decompressed bytes buffer. Bytes are decompressed from src to dst
+    /// before being passed back to the caller.
+    dst: Vec<u8>,
+    /// Index into dst and length: starting point of bytes previously output
+    /// that are still part of the decompressor window.
+    ext_dict_offset: usize,
+    ext_dict_len: usize,
+    /// Index into dst: starting point of bytes not yet read by caller.
+    dst_start: usize,
+    /// Index into dst: ending point of bytes not yet read by caller.
+    dst_end: usize,
+    content_hasher: XxHash32,
     /// inner buffer memeory of compressed bytes
     inner: Option<Arc<Mmap>>,
 }
 
 impl PyFrameDecoderReader {
     /// Atomic reference to the memory map allowing for fast read only access  
-    #[allow(dead_code)]
     pub(crate) fn inner(&self) -> PyResult<Arc<Mmap>> {
         match &self.inner {
             Some(arc) => Ok(Arc::clone(arc)), // Explicit Arc::clone
             None => Err(ReadError::new_err("File is closed".to_string())),
         }
+    }
+
+    #[inline]
+    fn read_checksum(input: &[u8], position: usize) -> PyResult<u32> {
+        if input.len() < position + 4 {
+            // Check if we have 4 bytes from position
+            return Err(ReadError::new_err(
+                "Not enough bytes to read checksum at position",
+            ));
+        }
+        let array = [
+            input[position],
+            input[position + 1],
+            input[position + 2],
+            input[position + 3],
+        ];
+        let checksum = u32::from_le_bytes(array);
+        Ok(checksum)
+    }
+
+    #[inline]
+    fn check_block_checksum(data: &[u8], expected_checksum: u32) -> PyResult<()> {
+        let mut block_hasher = XxHash32::with_seed(0);
+        block_hasher.write(data);
+        let calc_checksum = block_hasher.finish() as u32;
+        if calc_checksum != expected_checksum {
+            return Err(LZ4BlockError::new_err(format!(
+                "The block checksum doesn't match. Expected {expected_checksum}"
+            )));
+        }
+        Ok(())
+    }
+
+    fn read_block(&mut self) -> PyResult<usize> {
+        let frame_info = &self.frame_info;
+
+        // Adjust dst buffer offsets to decompress the next block
+        let max_block_size = frame_info.block_size.get_size()?;
+        if frame_info.block_mode == PyBlockMode::Linked {
+            // In linked mode we consume the output (bumping dst_start) but leave the
+            // beginning of dst to be used as a prefix in subsequent blocks.
+            // That is at least until we have at least `max_block_size + WINDOW_SIZE`
+            // bytes in dst, then we setup an ext_dict with the last WINDOW_SIZE bytes
+            // and the output goes to the beginning of dst again.
+            debug_assert_eq!(self.dst.capacity(), max_block_size * 2 + WINDOW_SIZE);
+            if self.dst_start + max_block_size > self.dst.capacity() {
+                // Output might not fit in the buffer.
+                // The ext_dict will become the last WINDOW_SIZE bytes
+                debug_assert!(self.dst_start >= max_block_size + WINDOW_SIZE);
+                self.ext_dict_offset = self.dst_start - WINDOW_SIZE;
+                self.ext_dict_len = WINDOW_SIZE;
+                // Output goes in the beginning of the buffer again.
+                self.dst_start = 0;
+                self.dst_end = 0;
+            } else if self.dst_start + self.ext_dict_len > WINDOW_SIZE {
+                // There's more than WINDOW_SIZE bytes of lookback adding the prefix and ext_dict.
+                // Since we have a limited buffer we must shrink ext_dict in favor of the prefix,
+                // so that we can fit up to max_block_size bytes between dst_start and ext_dict
+                // start.
+                let delta = self
+                    .ext_dict_len
+                    .min(self.dst_start + self.ext_dict_len - WINDOW_SIZE);
+                self.ext_dict_offset += delta;
+                self.ext_dict_len -= delta;
+                debug_assert!(self.dst_start + self.ext_dict_len >= WINDOW_SIZE)
+            }
+        } else {
+            debug_assert_eq!(self.ext_dict_len, 0);
+            debug_assert_eq!(self.dst.capacity(), max_block_size);
+            self.dst_start = 0;
+            self.dst_end = 0;
+        }
+
+        // let buffer = &self.inner()?[self.offset..];
+        let buffer = &self.inner()?;
+        // Read and decompress block
+        let block_info = {
+            let block_buffer = buffer.get(self.offset..self.offset + 4);
+            if let Some(output) = block_buffer {
+                // increment blockinfo 4 bytes
+                self.offset += 4;
+                BlockInfo::read(&output)?
+            } else {
+                return Ok(0);
+            }
+        };
+
+        match block_info {
+            BlockInfo::Uncompressed(len) => {
+                let len = len as usize;
+                if len > max_block_size {
+                    return Err(ReadError::new_err(
+                        "Read a block larger than specified in the Frame header.",
+                    ));
+                }
+                // TODO: Attempt to avoid initialization of read buffer when
+                // https://github.com/rust-lang/rust/issues/42788 stabilizes
+                let output =
+                    vec_resize_and_get_mut(&mut self.dst, self.dst_start, self.dst_start + len);
+
+                output.copy_from_slice(&buffer[self.offset..self.offset + len]);
+                let _ = self.offset.wrapping_add(len);
+
+                if frame_info.block_checksums {
+                    let expected_checksum = Self::read_checksum(buffer, self.offset)?;
+                    Self::check_block_checksum(
+                        &self.dst[self.dst_start..self.dst_start + len],
+                        expected_checksum,
+                    )?;
+                }
+
+                self.dst_end += len;
+                self.content_len += len as u64;
+            }
+            BlockInfo::Compressed(len) => {
+                let len = len as usize;
+                if len > max_block_size {
+                    return Err(ReadError::new_err(
+                        "Read a block larger than specified in the Frame header.",
+                    ));
+                }
+                // TODO: Attempt to avoid initialization of read buffer when
+                // https://github.com/rust-lang/rust/issues/42788 stabilizes
+                let output = vec_resize_and_get_mut(&mut self.src, 0, len);
+
+                output.copy_from_slice(&buffer[self.offset..self.offset + len]);
+                self.offset += len;
+
+                if frame_info.block_checksums {
+                    let expected_checksum = Self::read_checksum(buffer, self.offset)?;
+                    Self::check_block_checksum(&self.src[..len], expected_checksum)?;
+                }
+
+                let with_dict_mode =
+                    frame_info.block_mode == PyBlockMode::Linked && self.ext_dict_len != 0;
+                let decomp_size = if with_dict_mode {
+                    debug_assert!(self.dst_start + max_block_size <= self.ext_dict_offset);
+                    let (head, tail) = self.dst.split_at_mut(self.ext_dict_offset);
+                    let ext_dict = &tail[..self.ext_dict_len];
+
+                    debug_assert!(head.len() - self.dst_start >= max_block_size);
+                    lz4_flex::block::decompress_into_with_dict(
+                        &self.src[..len],
+                        &mut head[..self.dst_start],
+                        ext_dict,
+                    )
+                } else {
+                    // Independent blocks OR linked blocks with only prefix data
+                    debug_assert!(self.dst.capacity() - self.dst_start >= max_block_size);
+                    self.dst.resize(self.dst_start + max_block_size, 0);
+                    lz4_flex::block::decompress_into(&self.src[..len], &mut self.dst)
+                }
+                .map_err(|e| DecompressionError::new_err(format!("{}", e)))?;
+
+                self.dst_end += decomp_size;
+                self.content_len += decomp_size as u64;
+            }
+
+            BlockInfo::Eof => {
+                if let Some(expected) = frame_info.content_size {
+                    if self.content_len != expected {
+                        return Err(ReadError::new_err(format!(
+                            "Content length differs. Expected {expected}, and got {}",
+                            self.content_len
+                        )));
+                    }
+                }
+                if frame_info.content_checksum {
+                    let expected_checksum = Self::read_checksum(buffer, self.offset)?;
+                    let calc_checksum = self.content_hasher.finish() as u32;
+                    if calc_checksum != expected_checksum {
+                        return Err(LZ4Exception::new_err(format!("The block checksum doesn't match. Expected {expected_checksum}, actually got {calc_checksum}")));
+                    }
+                }
+                return Ok(0);
+            }
+        }
+
+        // Content checksum, if applicable
+        if frame_info.content_checksum {
+            self.content_hasher
+                .write(&self.dst[self.dst_start..self.dst_end]);
+        }
+        // increment current block read
+        self.current_block += 1;
+        Ok(self.dst_end - self.dst_start)
     }
 }
 
@@ -702,16 +945,50 @@ impl PyFrameDecoderReader {
                 .map_err(|e| PyIOError::new_err(format!("Failed to mmap file: {}", e)))?
         });
 
-        let header = PyFrameInfo::read_header_info(&inner)?;
+        if inner.len() < MIN_FRAME_INFO_SIZE {
+            return Err(HeaderError::new_err("header is too small to be lz4."));
+        }
+
         let offset = PyFrameInfo::read_header_size(&inner)?;
 
-        // let blocks =
+        let frame_info = PyFrameInfo::read_header_info(&inner)?;
+        if frame_info.dict_id.is_some() {
+            // Unsupported right now so it must be None
+            return Err(LZ4Exception::new_err(
+                "dict_id is currently not supported at this time.",
+            ));
+        }
+
+        let max_block_size = frame_info.block_size.get_size()?;
+        let dst_size = if frame_info.block_mode == PyBlockMode::Linked {
+            // In linked mode we consume the output (bumping dst_start) but leave the
+            // beginning of dst to be used as a prefix in subsequent blocks.
+            // That is at least until we have at least `max_block_size + WINDOW_SIZE`
+            // bytes in dst, then we setup an ext_dict with the last WINDOW_SIZE bytes
+            // and the output goes to the beginning of dst again.
+            // Since we always want to be able to write a full block (up to max_block_size)
+            // we need a buffer with at least `max_block_size * 2 + WINDOW_SIZE` bytes.
+            max_block_size * 2 + WINDOW_SIZE
+        } else {
+            max_block_size
+        };
+
+        let src = Vec::with_capacity(max_block_size);
+        let dst = Vec::with_capacity(dst_size);
 
         Ok(Self {
-            header,
+            frame_info,
             offset,
+            src,
+            dst,
+            current_block: 0,
+            ext_dict_offset: 0,
+            ext_dict_len: 0,
+            dst_start: 0,
+            dst_end: 0,
+            content_hasher: XxHash32::with_seed(0),
+            content_len: 0,
             inner: Some(inner),
-            // blocks : std::collections::LinkedList::new()
         })
     }
 
@@ -720,33 +997,46 @@ impl PyFrameDecoderReader {
     }
 
     pub fn content_size(&self) -> PyResult<Option<u64>> {
-        self.header.get_content_size()
+        self.frame_info.get_content_size()
     }
 
     pub fn block_size(&self) -> PyResult<PyBlockSize> {
-        self.header.get_block_size()
+        self.frame_info.get_block_size()
     }
 
     pub fn block_checksum(&self) -> PyResult<bool> {
-        self.header.get_block_checksums()
+        self.frame_info.get_block_checksums()
     }
 
     pub fn frame_info(&self) -> PyResult<PyFrameInfo> {
-        Ok(self.header.clone())
+        Ok(self.frame_info)
     }
 
-    pub fn get_block<'py>(&self, _py: Python<'py>, _idx: usize) -> PyResult<PyBound<'py, PyBytes>> {
-        unimplemented!()
-    }
-
+    /// Take the whole memory map and decompress the read only memeory into `bytes`.
     pub fn decompress<'py>(&self, py: Python<'py>) -> PyResult<PyBound<'py, PyBytes>> {
-        let mut output = Vec::with_capacity(self.header.content_size.unwrap_or(65536) as usize);
-        let buffer = &self.inner()?[..];
-        let mut decoder = FrameDecoder::new(buffer);
-        decoder.read_to_end(&mut output).map_err(|e| {
-            DecompressionError::new_err(format!("Decompression failed while reading: {}", e))
-        })?;
-        Ok(PyBytes::new(py, &output))
+        decompress(py, &self.inner()?[..])
+    }
+
+    fn read<'py>(
+        &mut self,
+        py: Python<'py>,
+        size: isize,
+    ) -> PyResult<Option<PyBound<'py, PyBytes>>> {
+        let mut buf = vec![0u8; size as usize];
+        loop {
+            // Fill read buffer if there's uncompressed data left
+            if self.dst_start < self.dst_end {
+                let read_len = std::cmp::min(self.dst_end - self.dst_start, buf.len());
+                let dst_read_end = self.dst_start + read_len;
+                buf[..read_len].copy_from_slice(&self.dst[self.dst_start..dst_read_end]);
+                self.dst_start = dst_read_end;
+
+                return Ok(Some(PyBytes::new(py, &buf[..read_len])));
+            }
+            if self.read_block()? == 0 {
+                return Ok(None);
+            }
+        }
     }
 
     pub fn __enter__(slf: Py<Self>) -> Py<Self> {
@@ -757,6 +1047,14 @@ impl PyFrameDecoderReader {
         // when mmap goes out of scope, rust will drop mmap
         self.inner = None;
     }
+}
+
+#[inline]
+fn vec_resize_and_get_mut(v: &mut Vec<u8>, start: usize, end: usize) -> &mut [u8] {
+    if end > v.len() {
+        v.resize(end, 0)
+    }
+    &mut v[start..end]
 }
 
 #[pyclass]

@@ -126,11 +126,7 @@ def test_compression_prepend_size_with_dict():
         buffer = compress_prepend_size_with_dict(expected, ext_dict)
 
         min_size = int.from_bytes(buffer[:4], "little")
-        output = decompress_with_dict(
-            buffer[4:],
-            min_size,
-            ext_dict
-        )
+        output = decompress_with_dict(buffer[4:], min_size, ext_dict)
         assert min_size == len(expected)
         assert expected == output
 
@@ -141,8 +137,5 @@ def test_decompression_prepend_size_with_dict():
         expected = file.read(-1)
         buffer = compress_prepend_size_with_dict(expected, ext_dict)
 
-        output = decompress_prepend_size_with_dict(
-            buffer,
-            ext_dict
-        )
+        output = decompress_prepend_size_with_dict(buffer, ext_dict)
         assert expected == output

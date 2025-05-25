@@ -335,7 +335,7 @@ class LZCompressionReader:
         Returns the offset after the LZ4 frame header.
 
         Returns:
-            int: Offset in bytes to the start of the first data block.
+            (`int`): Offset in bytes to the start of the first data block.
         """
         ...
     def content_size(self) -> Optional[int]:
@@ -343,7 +343,7 @@ class LZCompressionReader:
         Returns the content size specified in the LZ4 frame header.
 
         Returns:
-            Optional[int]: Content size if present, or None.
+            (`Optional[int]`): Content size if present, or None.
         """
         ...
     def block_size(self) -> BlockSize:
@@ -351,7 +351,7 @@ class LZCompressionReader:
         Returns the block size used in the LZ4 frame.
 
         Returns:
-            PyBlockSize: Enum representing the block size.
+            (`BlockSize`): Enum representing the block size.
         """
         ...
     def block_checksum(self) -> bool:
@@ -367,26 +367,34 @@ class LZCompressionReader:
         Returns a copy of the parsed frame header.
 
         Returns:
-            PyFrameInfo: Frame header metadata object.
+            (`FrameInfo`): Frame header metadata object.
         """
         ...
-    def get_block(self, idx: int) -> bytes:
+    def read(self, size: int) -> bytes:
         """
-        Reads and returns a decompressed block at the given index.
+        Reads and returns a decompressed block of the specified size.
+        This method attempts to read a block of compressed data
+        and decompress it into the desired size. It is typically used
+        when working with framed compression formats such as LZ4.
 
         Args:
-            idx (int): Block index to read.
+            size (int): The number of bytes to return after decompression.
 
         Returns:
-            bytes: The decompressed block data.
+            bytes: A decompressed byte string of the requested size.
 
         Raises:
-            IndexError: If the block index is out of range.
-            LZ4Exception: If block decompression fails.
+            ReadError:
+                Raised if the input stream cannot be read or is incomplete.
+            DecompressionError:
+                Raised if the source buffer cannot be decompressed
+                into the destination buffer, typically due to corrupt or
+                malformed input.
+            LZ4Exception:
+                Raised if a block checksum does not match the expected value,
+                indicating potential data corruption.
         """
         ...
-    def __iter__(self) -> Self: ...
-    def __next__(self) -> bytes: ...
     def __enter__(self) -> Self:
         """
         Context manager entry — returns self.

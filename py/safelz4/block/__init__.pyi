@@ -141,7 +141,7 @@ def decompress_prepend_size_with_dict(input: bytes, ext_dict: bytes) -> bytes:
     """
     Decompress input bytes using a user-provided dictionary
     of bytes, size is already pre-appended.
-    
+
     Args:
         input (`bytes`):
             Fixed set of bytes to be decompressed.
