@@ -15,6 +15,7 @@ help:
 	@echo "  help      - Show this help message"
 	@echo "  clean     - Remove build artifacts and cache files"
 	@echo "  test      - Run all tests"
+	@echo "  develop   - Develop release maturin, and install within virtual environment"
 	@echo "  flake     - Run flake8 lint checking on source files (ignore: E302,E704,E301)"
 	@echo "  fuzz	   - Run current fuzz target tests. e.g make fuzz TARGET=fuzz_roundtrip"
 	@echo "  lint      - Run Black lint check on all source files"
@@ -74,6 +75,5 @@ install-dev:
 build:
 	$(PIP) install .
 
-build-exp:
-	maturin build
-	pip install -e .
+develop:
+	maturin develop --release
