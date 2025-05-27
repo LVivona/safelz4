@@ -1,6 +1,6 @@
 import os
 import io
-from typing import Optional, Union, Any, Literal, overload
+from typing import Optional, Union, Any, Literal, Iterator, overload
 from typing_extensions import Self
 
 from enum import IntEnum, Enum
@@ -45,17 +45,6 @@ class BlockSize(IntEnum):
 class FrameInfo:
     """
     Information about a compression frame.
-
-    Attributes:
-        content_size: If set, includes the total uncompressed size of data in
-                      the frame.
-        block_size: The maximum uncompressed size of each data block.
-        block_mode: The block mode.
-        block_checksums: If set, includes a checksum for each data block in the
-        frame.
-        content_checksum: If set, includes a content checksum to verify that the
-          full frame contents have been decoded correctly.
-        legacy_frame: If set, use the legacy frame format.
     """
 
     content_size: Optional[int]
@@ -232,7 +221,7 @@ def compress_file_with_info(
             The filename we are saving into.
         input (`bytes`):
             fixed set of bytes to be compressed.
-        info (`FrameInfo, *optional*, defaults to `None``):
+        info (`FrameInfo`, *optional*, defaults to `None`):
             The metadata for de/compressing with lz4 frame format.
 
     Returns:
@@ -251,7 +240,7 @@ def compress_with_info(
     Args:
         input (`bytes`):
             fixed set of bytes to be compressed.
-        info (`FrameInfo, *optional*, defaults to `None``):
+        info (`FrameInfo`, *optional*, defaults to `None`):
             The metadata for de/compressing with lz4 frame format.
 
     Returns:
@@ -262,16 +251,15 @@ def compress_with_info(
 
 @overload
 def is_framefile(name: Union[os.PathLike, str]) -> bool:
-    os.PathLike, str
     """
     Check if a file is a valid LZ4 Frame file by reading its header
 
     Args:
         name (`str` or `os.PathLike`):
-            Path to the LZ4 frame file.
+            The filename we are saving into.
 
     Returns:
-        (`bool)`: true if the file appears to be a valid LZ4 file
+        (`bool`): true if the file appears to be a valid LZ4 file
     """
     ...
 
@@ -323,7 +311,8 @@ class LZCompressionReader:
     Read and parse an LZ4 frame file in memory using memory mapping.
 
     Args:
-        filename (`str`): Path to the LZ4 frame file.
+        filename (`str` or `os.PathLike`):
+            Path to the LZ4 frame file.
 
     Raises:
         (`IOError`): If the file cannot be opened or memory-mapped.
@@ -363,7 +352,7 @@ class LZCompressionReader:
         Checks if block checksums are enabled for this frame.
 
         Returns:
-            bool: True if block checksums are enabled, False otherwise.
+            (`bool`): True if block checksums are enabled, False otherwise.
         """
         ...
     def frame_info(self) -> FrameInfo:
@@ -388,24 +377,26 @@ class LZCompressionReader:
             (`bytes`): A decompressed byte string of the requested size.
 
         Raises:
-            ReadError:
+            (`ReadError`):
                 Raised if the input stream cannot be read or is incomplete.
-            DecompressionError:
+            (`DecompressionError`):
                 Raised if the source buffer cannot be decompressed
                 into the destination buffer, typically due to corrupt or
                 malformed input.
-            LZ4Exception:
+            (`LZ4Exception`):
                 Raised if a block checksum does not match the expected value,
                 indicating potential data corruption.
         """
         ...
     def close(self) -> None: ...
+    @property
+    def closed(self) -> bool: ...
     def __enter__(self) -> Self:
         """
         Context manager entry — returns self.
 
         Returns:
-            FrameDecoderReader: The reader instance itself.
+            (`FrameDecoderReader`): The reader instance itself.
         """
         ...
     def __exit__(
@@ -415,7 +406,7 @@ class LZCompressionReader:
         traceback: Optional[Any],
     ) -> None:
         """
-        Context manager exit — releases memory mapping.
+        Context manager exit
         """
         ...
 
@@ -424,11 +415,12 @@ class LZCompressionWriter:
     Write LZ4 frame-compressed data to a file.
 
     Args:
-        filename (str): Output file path.
-        info (Optional[PyFrameInfo]): Frame parameters; uses defaults if None.
+        filename (`str`): Output file path.
+        info (`FrameInfo`, *optional*, defaults to `None`): Frame parameters; uses defaults if None.
 
     Raises:
-        IOError: If the file cannot be opened for writing.
+        (`IOError`): If the file cannot be opened for writing.
+        (`CompressionError`): If writing something happens when into enocder.
     """
 
     def __new__(
@@ -439,7 +431,7 @@ class LZCompressionWriter:
         Returns the current write offset (total bytes written).
 
         Returns:
-            int: The number of bytes written so far.
+            (`int`): The number of bytes written so far.
         """
         ...
     def write(self, input: bytes) -> int:
@@ -453,7 +445,15 @@ class LZCompressionWriter:
             (`int`): Number of bytes written.
 
         Raises:
-            CompressionError: If compression or writing fails.
+            (`CompressionError`): If compression or writing fails.
+        """
+        ...
+    def mode(self) -> Literal["wb", "rb"]:
+        """
+        Return current mode
+
+        Returns:
+            (`Literal["wb", "rb"]`): mode of reading or writing into file.
         """
         ...
     def flush(self) -> None:
@@ -461,7 +461,7 @@ class LZCompressionWriter:
         Flushes the internal buffer to disk.
 
         Raises:
-            IOError: If flushing fails.
+            (`IOError`): If flushing fails.
         """
         ...
     def close(self) -> None:
@@ -472,12 +472,14 @@ class LZCompressionWriter:
             IOError: If flushing fails during close.
         """
         ...
+    @property
+    def closed(self) -> bool: ...
     def __enter__(self) -> Self:
         """
         Context manager entry — returns self.
 
         Returns:
-            FrameEncoderWriter: The writer instance itself.
+            (`LZCompressionWriter`): The writer instance itself.
         """
         ...
     def __exit__(
