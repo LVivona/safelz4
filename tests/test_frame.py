@@ -2,7 +2,14 @@ import os
 import pytest
 
 import safelz4
-from safelz4 import BlockSize, BlockMode, FrameInfo, compress, decompress, compress_file
+from safelz4 import (
+    BlockSize,
+    BlockMode,
+    FrameInfo,
+    compress,
+    decompress,
+    compress_file,
+)
 from safelz4.frame import compress_with_info
 import tempfile
 
@@ -60,7 +67,8 @@ def test_decompress_regular():
         buffer = compress_with_info(expected, info)
 
         output = decompress(buffer)
-        assert output.decode("utf-8") == expected
+        assert output == expected
+
 
 def test_context_manager_decompression():
     tmp = tempfile.NamedTemporaryFile()
@@ -71,11 +79,10 @@ def test_context_manager_decompression():
         length = len(expected)
         _ = compress_file(tmp.name, expected)
 
-
     output = None
     with safelz4.open(tmp.name, "rb") as f:
         output = f.read(length)
-    
+
     assert output == expected
 
 
@@ -95,5 +102,5 @@ def test_context_manager_roundtrip():
     output = None
     with safelz4.open(tmp.name, "rb") as f:
         output = f.read(length)
-    
+
     assert output == expected
