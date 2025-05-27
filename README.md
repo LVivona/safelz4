@@ -103,6 +103,91 @@ with safelz4.open("dickens.lz4", "rb") as f:
 
 ```
 
+## Bechmarks
+
+Benchmark results are available in the `benches` folder. We evaluated performance in two key scenarios:
+
+   **Full byte availability**, where the entire buffer is accessible during compression and decompression.
+
+  **Streamed access**, using reader and writer interfaces with chunked input.
+
+  ###  Summary
+
+  In full buffer scenarios, `lz4` generally performs well and occasionally outpaces `safelz4`, especially on larger files. However, `safelz4` still remained competitive, with close times.
+
+  In reader/writer scenarios (chunked input, 1024 bytes), `safelz4` significantly outperforms `lz4`, consistently achieving more than 2x speed improvement in both compression and decompression.
+
+### Streamed access ``(chunk 1024 bytes)``
+
+| `open` Benchmark                                | safelz4 | lz4             |
+|-------------------------------------------------|---------------|-----------------------|
+| ctx_compression_writer_compression_1k.txt       | 8.84 us       | 22.5 us: 2.54x slower |
+| ctx_compression_writer_compression_34k.txt      | 9.07 us       | 22.6 us: 2.49x slower |
+| ctx_compression_writer_compression_65k.txt      | 9.18 us       | 23.0 us: 2.50x slower |
+| ctx_compression_writer_compression_66k_JSON.txt | 9.18 us       | 23.1 us: 2.51x slower |
+| ctx_compression_writer_dickens.txt              | 9.16 us       | 23.9 us: 2.61x slower |
+| ctx_compression_writer_hdfs.json                | 9.21 us       | 22.9 us: 2.49x slower |
+| ctx_compression_writer_reymont.pdf              | 9.26 us       | 22.9 us: 2.48x slower |
+| ctx_compression_writer_xml_collection.xml       | 9.27 us       | 23.1 us: 2.49x slower |
+| **Geometric mean**                              | **(ref)**     | **2.51x slower**      |
+
+| `open` Benchmark                                       | safelz4 | lz4            |
+|-------------------------------------------------|----------------|-----------------------|
+| ctx_decompression_writer_compression_1k.txt       | 11.0 us        | 17.6 us: 1.59x slower |
+| ctx_decompression_writer_compression_34k.txt      | 23.8 us        | 46.2 us: 1.94x slower |
+| ctx_decompression_writer_compression_65k.txt      | 34.6 us        | 68.6 us: 1.98x slower |
+| ctx_decompression_writer_compression_66k_JSON.txt | 27.1 us        | 61.9 us: 2.28x slower |
+| ctx_decompression_writer_dickens.txt              | 4.11 ms        | 8.67 ms: 2.11x slower |
+| ctx_decompression_writer_hdfs.json                | 1.77 ms        | 4.39 ms: 2.48x slower |
+| ctx_decompression_writer_reymont.pdf              | 2.92 ms        | 5.74 ms: 1.97x slower |
+| ctx_decompression_writer_xml_collection.xml       | 1.99 ms        | 3.97 ms: 2.00x slower |
+| **Geometric mean**                              | **(ref)**      | **2.03x slower**      |
+
+### Full byte availability Run(s) 
+| `frame.compress` Benchmark                           | safelz4 | lz4                 |
+|-------------------------------------|-----------|----------------------|
+| compression_compression_1k.txt       | 829 ns    | 839 ns: 1.01x slower |
+| compression_compression_34k.txt      | 26.3 us   | 32.5 us: 1.23x slower |
+| compression_compression_65k.txt      | 49.9 us   | 60.1 us: 1.20x slower |
+| compression_compression_66k_JSON.txt | 26.5 us   | 24.7 us: 1.07x faster |
+| compression_dickens.txt              | 17.0 ms   | 15.9 ms: 1.07x faster |
+| compression_hdfs.json                | 3.16 ms   | 2.63 ms: 1.20x faster |
+| compression_reymont.pdf              | 12.3 ms   | 11.4 ms: 1.08x faster |
+| compression_xml_collection.xml       | 4.58 ms   | 4.12 ms: 1.11x faster |
+| **Geometric mean**                  | **(ref)** | **1.01x faster**      |
+
+| `frame.decompress` Benchmark                           | safelz4 | lz4                |
+|-------------------------------------|------------|----------------------|
+| decompress_compression_1k.txt       | 612 ns     | 416 ns: 1.47x faster |
+| decompress_compression_34k.txt      | 8.96 us    | 10.0 us: 1.12x slower |
+| decompress_compression_65k.txt      | 15.4 us    | 17.1 us: 1.11x slower |
+| decompress_compression_66k_JSON.txt | 9.45 us    | 8.04 us: 1.18x faster |
+| decompress_dickens.txt              | 4.00 ms    | 2.13 ms: 1.88x faster |
+| decompress_hdfs.json                | 1.50 ms    | 1.03 ms: 1.45x faster |
+| decompress_reymont.pdf              | 2.42 ms    | 1.99 ms: 1.21x faster |
+| decompress_xml_collection.xml       | 1.68 ms    | 1.19 ms: 1.41x faster |
+| **Geometric mean**                  | **(ref)**  | **1.26x faster**      |
+
+
+**NOTE**: All benchmarks were performed using python package `pypref`, on a system equipped with an Apple M4 Max processor and 36GB of unified memory.
+
+## Acknowledgement
+
+This project acknowledges the outstanding work of Yann Collet.
+
+Special thanks also to the maintainers of the [lz4_flex](https://github.com/PSeitz/lz4_flex) Rust crate for providing a safe, pure-Rust implementation of LZ4 compression and decompression.
+
+## Other Implementation
+
+`LZ4` implementations, including:
+
+| Python Library    | Build Status | Version | Licence | 
+| -------- | ------- | ------- | ------- |
+| [python-lz4](https://github.com/python-lz4/python-lz4) | ![](https://pypi-camo.freetls.fastly.net/6d3d73bb6f61ccadc08c11e3dcee01e847fc768e/68747470733a2f2f6769746875622e636f6d2f707974686f6e2d6c7a342f707974686f6e2d6c7a342f616374696f6e732f776f726b666c6f77732f6275696c645f646973742e796d6c2f62616467652e737667)    | ![](https://img.shields.io/pypi/v/lz4) | ![PyPI - License](https://img.shields.io/pypi/l/lz4)
+ |
+
+
+
 ## Licence
 
 [MIT License](https://github.com/LVivona/safelz4/blob/main/LICENCE.md)
