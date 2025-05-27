@@ -184,7 +184,6 @@ Special thanks also to the maintainers of the [lz4_flex](https://github.com/PSei
 | Python Library    | Build Status | Version | Licence | 
 | -------- | ------- | ------- | ------- |
 | [python-lz4](https://github.com/python-lz4/python-lz4) | ![](https://pypi-camo.freetls.fastly.net/6d3d73bb6f61ccadc08c11e3dcee01e847fc768e/68747470733a2f2f6769746875622e636f6d2f707974686f6e2d6c7a342f707974686f6e2d6c7a342f616374696f6e732f776f726b666c6f77732f6275696c645f646973742e796d6c2f62616467652e737667)    | ![](https://img.shields.io/pypi/v/lz4) | ![PyPI - License](https://img.shields.io/pypi/l/lz4)
- |
 
 
 
