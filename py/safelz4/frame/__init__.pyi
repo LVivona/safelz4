@@ -1,6 +1,6 @@
 import os
 import io
-from typing import Optional, Union, Any, Literal, Iterator, overload
+from typing import Optional, Union, Any, Literal, overload
 from typing_extensions import Self
 
 from enum import IntEnum, Enum
@@ -415,8 +415,10 @@ class LZCompressionWriter:
     Write LZ4 frame-compressed data to a file.
 
     Args:
-        filename (`str`): Output file path.
-        info (`FrameInfo`, *optional*, defaults to `None`): Frame parameters; uses defaults if None.
+        filename (`str`):
+            Output file path.
+        info (`FrameInfo`, *optional*, defaults to `None`):
+            Frame parameters; uses defaults if None.
 
     Raises:
         (`IOError`): If the file cannot be opened for writing.
