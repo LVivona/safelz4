@@ -534,7 +534,7 @@ fn compress<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes
 ///     (`None`)
 #[pyfunction]
 #[pyo3(signature = (filename, input))]
-fn compress_file(filename: PathBuf, input: &[u8]) -> PyResult<()> {
+fn compress_into_file(filename: PathBuf, input: &[u8]) -> PyResult<()> {
     let file = std::fs::File::create(&filename)
         .map_err(|_| PyFileExistsError::new_err(format!("{filename:?} already exist.")))?;
     let vec = std::io::BufWriter::new(file);
@@ -564,7 +564,7 @@ fn compress_file(filename: PathBuf, input: &[u8]) -> PyResult<()> {
 ///    (`None`)
 #[pyfunction]
 #[pyo3(signature = (filename, input, info = None))]
-fn compress_file_with_info(
+fn compress_into_file_with_info(
     filename: PathBuf,
     input: &[u8],
     info: Option<PyFrameInfo>,
@@ -618,7 +618,7 @@ fn compress_with_info<'py>(
 ///     input (`bytes`):
 ///         A byte containing LZ4-compressed data (in frame format).
 ///         Typically obtained from a prior call to an `compress`, `compress_with_info` or read from
-///         a compressed file `compress_file`, or `compress_file_with_info`.
+///         a compressed file `compress_into_file`, or `compress_into_file_with_info`.
 /// Returns:
 ///     (`bytes`):
 ///         The decompressed (original) representation of the input bytes.
@@ -727,7 +727,7 @@ impl BlockInfo {
 ///     (`DecompressionError`): If decompressing
 ///
 #[pyclass]
-#[pyo3(name = "LZCompressionReader")]
+#[pyo3(name = "FrameDecoderReader")]
 struct PyFrameDecoderReader {
     /// file header
     frame_info: PyFrameInfo,
@@ -879,7 +879,7 @@ impl PyFrameDecoderReader {
                     vec_resize_and_get_mut(&mut self.dst, self.dst_start, self.dst_start + len);
 
                 output.copy_from_slice(&buffer[self.offset..self.offset + len]);
-                let _ = self.offset.wrapping_add(len);
+                self.offset += len;
 
                 if frame_info.block_checksums {
                     let expected_checksum = Self::read_checksum(buffer, self.offset)?;
@@ -1075,6 +1075,7 @@ impl PyFrameDecoderReader {
         }
     }
 
+    #[pyo3(signature = (size = -1))]
     pub fn read<'py>(
         &mut self,
         py: Python<'py>,
@@ -1137,7 +1138,7 @@ fn vec_resize_and_get_mut(v: &mut Vec<u8>, start: usize, end: usize) -> &mut [u8
 }
 
 #[pyclass]
-#[pyo3(name = "LZCompressionWriter")]
+#[pyo3(name = "FrameEncoderWriter")]
 struct PyFrameEncoderWriter {
     offset: usize,
     inner: Option<FrameEncoder<BufWriter<File>>>,
@@ -1156,15 +1157,33 @@ impl PyFrameEncoderWriter {
 #[pymethods]
 impl PyFrameEncoderWriter {
     #[new]
-    #[pyo3(signature = (filename, info = None))]
-    fn new(filename: PathBuf, info: Option<PyFrameInfo>) -> PyResult<Self> {
+    #[pyo3(signature = (filename, block_size, block_mode, block_checksums = None, dict_id = None, content_checksum = None, content_size = None, legacy_frame = None))]
+    fn new(
+        filename: PathBuf,
+        block_size: PyBlockSize,
+        block_mode: PyBlockMode,
+        block_checksums: Option<bool>,
+        dict_id: Option<u32>,
+        content_checksum: Option<bool>,
+        content_size: Option<u64>,
+        legacy_frame: Option<bool>,
+    ) -> PyResult<Self> {
         let file = File::create(&filename).map_err(|e| {
             PyIOError::new_err(format!("Failed to create file {:?}: {}", filename, e))
         })?;
 
         let wtr = BufWriter::new(file);
 
-        let frame_info: FrameInfo = info.unwrap_or_default().into();
+        let frame_info: FrameInfo = PyFrameInfo::new(
+            block_size,
+            block_mode,
+            block_checksums,
+            dict_id,
+            content_checksum,
+            content_size,
+            legacy_frame,
+        )
+        .into();
         let inner = Some(FrameEncoder::with_frame_info(frame_info, wtr));
 
         Ok(Self { offset: 0, inner })
@@ -1259,8 +1278,8 @@ pub(crate) fn register_frame_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // function
     frame_m.add_function(wrap_pyfunction!(compress, &frame_m)?)?;
-    frame_m.add_function(wrap_pyfunction!(compress_file, &frame_m)?)?;
-    frame_m.add_function(wrap_pyfunction!(compress_file_with_info, &frame_m)?)?;
+    frame_m.add_function(wrap_pyfunction!(compress_into_file, &frame_m)?)?;
+    frame_m.add_function(wrap_pyfunction!(compress_into_file_with_info, &frame_m)?)?;
     frame_m.add_function(wrap_pyfunction!(compress_with_info, &frame_m)?)?;
     frame_m.add_function(wrap_pyfunction!(decompress_file, &frame_m)?)?;
     frame_m.add_function(wrap_pyfunction!(decompress, &frame_m)?)?;

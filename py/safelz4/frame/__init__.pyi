@@ -116,7 +116,7 @@ def decompress(input: bytes) -> bytes:
         input (`bytes`):
             A byte containing LZ4-compressed data (in frame format).
             Typically obtained from a prior call to an `compress` or read from
-            a compressed file `compress_file`.
+            a compressed file `compress_into_file`.
 
     Returns:
         (`bytes`):
@@ -182,7 +182,7 @@ def compress(input: bytes) -> bytes:
     """
     ...
 
-def compress_file(filename: Union[os.PathLike, str], input: bytes) -> None:
+def compress_into_file(filename: Union[os.PathLike, str], input: bytes) -> None:
     """
     Compresses a buffer of bytes into a file using using the LZ4 frame format.
 
@@ -201,13 +201,13 @@ def compress_file(filename: Union[os.PathLike, str], input: bytes) -> None:
 
     with open("datafile.txt", "rb") as file:
         buffer = file.read(-1)
-        compress_file("datafile.lz4", buf_f)
+        compress_into_file("datafile.lz4", buf_f)
 
     ```
     """
     ...
 
-def compress_file_with_info(
+def compress_into_file_with_info(
     filename: Union[os.PathLike, str],
     input: bytes,
     info: Optional[FrameInfo] = None,
@@ -306,7 +306,7 @@ def decompress_prepend_size_with_dict(input: bytes, ext_dict: bytes) -> bytes:
     """
     ...
 
-class LZCompressionReader:
+class FrameDecoderReader:
     """
     Read and parse an LZ4 frame file in memory using memory mapping.
 
@@ -410,7 +410,7 @@ class LZCompressionReader:
         """
         ...
 
-class LZCompressionWriter:
+class FrameEncoderWriter:
     """
     Write LZ4 frame-compressed data to a file.
 
@@ -471,7 +471,7 @@ class LZCompressionWriter:
         Closes the writer and flushes any remaining data.
 
         Raises:
-            IOError: If flushing fails during close.
+            (`IOError`): If flushing fails during close.
         """
         ...
     @property
@@ -481,7 +481,7 @@ class LZCompressionWriter:
         Context manager entry — returns self.
 
         Returns:
-            (`LZCompressionWriter`): The writer instance itself.
+            (`FrameEncoderWriter`): The writer instance itself.
         """
         ...
     def __exit__(
@@ -499,15 +499,21 @@ class LZCompressionWriter:
 def open(
     filename: Union[str, os.PathLike],
     mode: Optional[Literal["rb", "rb|lz4", "wb", "wb|lz4"]] = None,
-) -> Union[LZCompressionReader, LZCompressionWriter]: ...
+) -> Union[FrameDecoderReader, FrameEncoderWriter]: ...
 @overload
 def open(
     filename: Union[str, os.PathLike],
     mode: Optional[Literal["wb", "wb|lz4"]] = None,
-    info: Optional[FrameInfo] = None,
-) -> LZCompressionWriter: ...
+    block_size: BlockSize = BlockSize.Auto,
+    block_mode: BlockMode = BlockMode.Independent,
+    block_checksums: Optional[bool] = None,
+    dict_id: Optional[bool] = None,
+    content_checksum: Optional[bool] = None,
+    content_size: Optional[int] = None,
+    legacy_frame: Optional[bool] = None,
+) -> FrameEncoderWriter: ...
 @overload
 def open(
     filename: Union[str, os.PathLike],
     mode: Optional[Literal["rb", "rb|lz4"]] = None,
-) -> LZCompressionReader: ...
+) -> FrameDecoderReader: ...

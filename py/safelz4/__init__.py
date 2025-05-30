@@ -9,7 +9,7 @@ from safelz4.frame import (
     compress,
     decompress,
     decompress_file,
-    compress_file,
+    compress_into_file,
     is_framefile,
     open,
 )
@@ -29,6 +29,6 @@ __all__ = [
     "decompress",
     "is_framefile",
     "decompress_file",
-    "compress_file",
+    "compress_into_file",
     "open",
 ]

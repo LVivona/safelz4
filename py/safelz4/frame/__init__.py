@@ -11,8 +11,8 @@ __all__ = [
     "decompress",
     "compress",
     "decompress_file",
-    "compress_file",
-    "compress_file_with_info",
+    "compress_into_file",
+    "compress_into_file_with_info",
     "compress_with_info",
     "is_framefile",
     "open",
@@ -24,13 +24,13 @@ BlockSize = _frame.BlockSize
 FrameInfo = _frame.FrameInfo
 
 # IO Bound Classes
-LZCompressionWriter = _frame.LZCompressionWriter
-LZCompressionReader = _frame.LZCompressionReader
+FrameEncoderWriter = _frame.FrameEncoderWriter
+FrameDecoderReader = _frame.FrameDecoderReader
 
 # Compression functions
 compress = _frame.compress
-compress_file = _frame.compress_file
-compress_file_with_info = _frame.compress_file_with_info
+compress_into_file = _frame.compress_into_file
+compress_into_file_with_info = _frame.compress_into_file_with_info
 compress_with_info = _frame.compress_with_info
 
 # Decompress functions
@@ -95,8 +95,14 @@ def is_framefile(
 def open(
     filename: Union[str, os.PathLike],
     mode: Optional[Literal["rb", "rb|lz4", "wb", "wb|lz4"]] = None,
-    info: Optional[_frame.FrameInfo] = None,
-) -> Union[_frame.LZCompressionReader, _frame.LZCompressionWriter]:
+    block_size: _frame.BlockSize = BlockSize.Auto,
+    block_mode: _frame.BlockMode = BlockMode.Independent,
+    block_checksums: Optional[bool] = None,
+    dict_id: Optional[bool] = None,
+    content_checksum: Optional[bool] = None,
+    content_size: Optional[int] = None,
+    legacy_frame: Optional[bool] = None,
+) -> Union[_frame.FrameDecoderReader, _frame.FrameEncoderWriter]:
     """
     Returns a context manager for reading or writing lz4 frames.
 
@@ -146,10 +152,19 @@ def open(
     ```
     """
     if mode is None:
-        return _frame.LZCompressionReader(filename)
+        return _frame.FrameDecoderReader(filename)
     elif mode in ("rb", "rb|lz4"):
-        return _frame.LZCompressionReader(filename)
+        return _frame.FrameDecoderReader(filename)
     elif mode in ("wb", "wb|lz4"):
-        return _frame.LZCompressionWriter(filename, info)
+        return _frame.FrameEncoderWriter(
+            filename,
+            block_size,
+            block_mode,
+            block_checksums,
+            dict_id,
+            content_checksum,
+            content_size,
+            legacy_frame,
+        )
     else:
         raise ValueError(f"Unsupported mode: {mode}")
