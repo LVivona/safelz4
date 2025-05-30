@@ -1079,8 +1079,14 @@ impl PyFrameDecoderReader {
     pub fn read<'py>(
         &mut self,
         py: Python<'py>,
-        size: isize,
+        size: Option<isize>,
     ) -> PyResult<Option<PyBound<'py, PyBytes>>> {
+        let closed = self.closed()?;
+        if closed {
+            return Err(PyValueError::new_err("I/O operation on closed file"))
+        }
+
+        let size = size.unwrap_or(-1);
         if size == 0 {
             Ok(Some(PyBytes::new(py, &[])))
         } else if size == -1 {
