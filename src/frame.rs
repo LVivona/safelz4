@@ -1083,7 +1083,7 @@ impl PyFrameDecoderReader {
     ) -> PyResult<Option<PyBound<'py, PyBytes>>> {
         let closed = self.closed()?;
         if closed {
-            return Err(PyValueError::new_err("I/O operation on closed file"))
+            return Err(PyValueError::new_err("I/O operation on closed file"));
         }
 
         let size = size.unwrap_or(-1);

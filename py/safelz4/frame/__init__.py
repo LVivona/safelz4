@@ -95,8 +95,9 @@ def is_framefile(
 
 class DecoderReaderWrapper(io.BufferedIOBase):
     """
-    Wrapper that combines io.BufferedIOBase interface with FrameDecoderReader functionality.
-    This makes the LZ4 decoder compatible with Python's standard I/O system.
+    Wrapper that combines io.BufferedIOBase interface with FrameDecoderReader
+    functionality. This makes the LZ4 decoder compatible with Python's
+    standard I/O system.
     """
 
     def __init__(self, filename: str) -> None:
@@ -144,13 +145,16 @@ class DecoderReaderWrapper(io.BufferedIOBase):
         Read and return up to size bytes.
 
         Args:
-            size: Number of bytes to read. If -1 or None, read all remaining data.
+            size (`int`, **optional**, default to -1):
+                Number of bytes to read. If -1 or None,
+                read all remaining data.
 
         Returns:
-            Bytes read from the stream
+            (`bytes`): block read from the stream return sized bytes of said
+                       block
 
         Raises:
-            ValueError: If the file is closed
+            (`ValueError`): If the file is closed
         """
         return self._inner.read(size)
 
@@ -163,13 +167,14 @@ class DecoderReaderWrapper(io.BufferedIOBase):
         Read data into a pre-allocated buffer.
 
         Args:
-            b: Buffer to read into (must support buffer protocol)
+            b (`Buffer`):
+                Buffer to read into (must support buffer protocol)
 
         Returns:
-            Number of bytes read, or None if EOF
+            (`Optional[int]`): Number of bytes read, or None if EOF
 
         Raises:
-            ValueError: If the file is closed
+            (`ValueError`): If the file is closed
         """
         if self.closed:
             raise ValueError("I/O operation on closed file")
@@ -190,8 +195,9 @@ class DecoderReaderWrapper(io.BufferedIOBase):
 
 class EncoderWriterWrapper(io.BufferedIOBase):
     """
-    Wrapper that combines io.BufferedIOBase interface with FrameEncoderWriter functionality.
-    This makes the LZ4 encoder compatible with Python's standard I/O system.
+    Wrapper that combines io.BufferedIOBase interface with
+    FrameEncoderWriter functionality. This makes the LZ4
+    encoder compatible with Python's standard I/O system.
     """
 
     def __init__(
@@ -226,7 +232,10 @@ class EncoderWriterWrapper(io.BufferedIOBase):
         return not self._inner.closed
 
     def seekable(self) -> bool:
-        """Returns False since writing streams typically don't support seeking."""
+        """
+        Returns False since writing streams typically
+        don't support seeking.
+        """
         return False
 
     def tell(self) -> int:
