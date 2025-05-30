@@ -1,6 +1,5 @@
 import os
 import pyperf
-import safelz4
 import lz4.frame
 import io
 from typing import Generator

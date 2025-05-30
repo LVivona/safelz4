@@ -1,7 +1,6 @@
 import os
 import pyperf
 import safelz4
-import safelz4.frame
 
 directory = os.path.dirname(os.path.abspath(__file__))
 samples = os.path.join(directory, "samples")
