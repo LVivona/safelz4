@@ -12,7 +12,7 @@ tmp = tempfile.NamedTemporaryFile()
 
 with open(filepath, "rb") as file:
     buf = file.read(-1)
-    safelz4.compress_file(tmp.name, buf)
+    safelz4.compress_into_file(tmp.name, buf)
 
 with safelz4.open(tmp.name, "rb") as file:
     while output := file.read(100):

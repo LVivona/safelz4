@@ -38,7 +38,7 @@ def benchmark_compression(name: str, _callable : Callable[[tempfile.NamedTempora
     
     with open(filename, "rb") as f :
         temp_file = tempfile.NamedTemporaryFile()
-        safelz4.compress_file(temp_file.name, f.read(-1))
+        safelz4.compress_into_file(temp_file.name, f.read(-1))
         py_runner.bench_func(f"ctx_compression_writer_{name}", _callable, temp_file)
 
 def main():
