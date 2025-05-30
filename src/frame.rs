@@ -1070,8 +1070,8 @@ impl PyFrameDecoderReader {
     #[getter]
     fn closed(&self) -> PyResult<bool> {
         match self.inner {
-            Some(_) => Ok(true),
-            None => Ok(false),
+            Some(_) => Ok(false),
+            None => Ok(true),
         }
     }
 
@@ -1219,8 +1219,8 @@ impl PyFrameEncoderWriter {
     #[getter]
     fn closed(&self) -> PyResult<bool> {
         match self.inner {
-            Some(_) => Ok(true),
-            None => Ok(false),
+            Some(_) => Ok(false),
+            None => Ok(true),
         }
     }
 
