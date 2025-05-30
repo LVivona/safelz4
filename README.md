@@ -94,7 +94,7 @@ import safelz4
 buffer = None
 with open("dickens.txt", "rb") as file:
     buffer = file.read(-1)
-    safelz4.compress_file("dickens.lz4", buffer)
+    safelz4.compress_into_file("dickens.lz4", buffer)
 
 
 with safelz4.open("dickens.lz4", "rb") as f:
