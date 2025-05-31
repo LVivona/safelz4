@@ -29,25 +29,24 @@ def get_magic_number(buffer: bytes) -> int:
     return int.from_bytes(buffer[:4], "little")
 
 
-def test_header_default():
-    # Read and compress the test file
-    with open(FILE_1Kb, "r") as f:
-        buffer = f.read().encode("utf-8")
-
-    compressed = compress(buffer)
-
+def frame_header(buffer: bytes):
     # Now analyze the header of the compressed data
-    if len(compressed) < MIN_FRAME_INFO_SIZE:
-        raise LZ4Exception(
-            f"Compressed output too small: {len(compressed)} bytes"
-        )
+    if len(buffer) < MIN_FRAME_INFO_SIZE:
+        raise LZ4Exception(f"Compressed output too small: {len(buffer)} bytes")
 
     # Check magic number
-    magic_num = get_magic_number(compressed)
+    magic_num = get_magic_number(buffer)
 
     if magic_num == LZ4F_LEGACY_MAGIC_NUMBER:
-        print("Legacy frame format detected")
-        return
+        return {
+            "block_size": BlockSize.Max8MB,
+            "block_mode": BlockMode.Independent,
+            "legacy_frame": True,
+            "content_size": None,
+            "dict_id": None,
+            "block_checksums": False,
+            "content_checksum": False,
+        }
 
     if magic_num in list(range(0x184D2A50, 0x184D2A5F)):
         raise LZ4Exception(f"Unexpected skippable frame")
@@ -58,7 +57,7 @@ def test_header_default():
         )
 
     # Parse flag bytes
-    flg_byte, bd_byte = compressed[4], compressed[5]
+    flg_byte, bd_byte = buffer[4], buffer[5]
 
     if flg_byte & FLG_VERSION_MASK != FLG_SUPPORTED_VERSION_BITS:
         raise LZ4Exception(
@@ -73,13 +72,10 @@ def test_header_default():
         block_mode = BlockMode.Independent
     else:
         block_mode = BlockMode.Linked
-    print(f"Block mode: {block_mode}")
 
     # Check checksums
     content_checksum = flg_byte & FLG_CONTENT_CHECKSUM != 0
     block_checksums = flg_byte & FLG_BLOCK_CHECKSUMS != 0
-    print(f"Content checksum: {content_checksum}")
-    print(f"Block checksums: {block_checksums}")
 
     # Determine block size
     block_size_code = (
@@ -99,41 +95,37 @@ def test_header_default():
     else:
         raise LZ4Exception(f"Unsupported block size code: {block_size_code}")
 
-    print(f"Block size: {block_size}")
-
     # Calculate current position in the header
     pos = 6  # After magic number and flag bytes
 
     # Check for content size
     content_size = None
     if flg_byte & FLG_CONTENT_SIZE != 0:
-        if len(compressed) < pos + 8:
+        if len(buffer) < pos + 8:
             raise LZ4Exception(
                 "Compressed data too small to contain content size"
             )
-        content_size = int.from_bytes(compressed[pos : pos + 8], "little")
+        content_size = int.from_bytes(buffer[pos : pos + 8], "little")
         pos += 8
-        print(f"Content size: {content_size}")
 
     # Check for dictionary ID
     dict_id = None
     if flg_byte & FLG_DICTIONARY_ID != 0:
-        if len(compressed) < pos + 4:
+        if len(buffer) < pos + 4:
             raise LZ4Exception(
                 "Compressed data too small to contain dictionary ID"
             )
-        dict_id = int.from_bytes(compressed[pos : pos + 4], "little")
+        dict_id = int.from_bytes(buffer[pos : pos + 4], "little")
         pos += 4
-        print(f"Dictionary ID: {dict_id}")
 
     # Verify header checksum
-    if len(compressed) < pos + 1:
+    if len(buffer) < pos + 1:
         raise LZ4Exception(
             "Compressed data too small to contain header checksum"
         )
 
-    expected_checksum = compressed[pos]
-    header_data = compressed[4:pos]
+    expected_checksum = buffer[pos]
+    header_data = buffer[4:pos]
 
     # Calculate checksum (right-shifted by 8 bits and keeping only the lowest byte)
     calculated_hash = (xxh32(header_data, seed=0).intdigest() >> 8) & 0xFF
@@ -142,21 +134,31 @@ def test_header_default():
         raise LZ4Exception(
             f"Header checksum mismatch: expected {expected_checksum}, got {calculated_hash}"
         )
-    else:
-        print("Header checksum verified successfully")
+    return dict(
+        content_size=content_size,
+        dict_id=dict_id,
+        block_size=block_size,
+        content_checksum=content_checksum,
+        block_checksums=block_checksums,
+        block_mode=block_mode,
+    )
 
-    print("Header validation completed successfully")
+
+def test_header_default():
+    # Read and compress the test file
+    with open(FILE_1Kb, "r") as f:
+        buffer = f.read().encode("utf-8")
+
+    output = compress(buffer)
 
     # You can now read the compressed data frame info using the library's functionality
     # and compare it with your manual parsing
+    frame_dict = frame_header(output)
 
-    frame_info = FrameInfo.read_header_info(compressed)
-    for byte in compressed[0:pos]:
-        print(f"{bin(byte):0<8}", end=" ")
+    frame_info = FrameInfo.read_header_info(output)
 
-    assert frame_info.block_checksums == block_checksums
-    assert frame_info.block_mode == block_mode
-    assert block_size == frame_info.block_size
-    assert frame_info.content_checksum == content_checksum
-    assert frame_info.content_size == content_size
-    print(f"\nLibrary parsed frame info: {frame_info}")
+    assert frame_info.block_checksums == frame_dict["block_checksums"]
+    assert frame_info.block_mode == frame_dict["block_mode"]
+    assert frame_info.block_size == frame_dict["block_size"]
+    assert frame_info.content_checksum == frame_dict["content_checksum"]
+    assert frame_info.content_size == frame_dict["content_size"]
