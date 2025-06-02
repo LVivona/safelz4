@@ -1,6 +1,6 @@
 [package]
 name = "safelz4_py"
-version = "0.0.1-dev"
+version = "0.0.1"
 edition = "2021"
 description = """
 High-performance Rust bindings to the LZ4 compression algorithm. Ideal for fast, lightweight data compression in systems programming, file formats, or network protocols. 
