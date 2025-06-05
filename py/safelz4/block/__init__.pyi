@@ -73,7 +73,7 @@ def compress_prepend_size_with_dict():
     """
     ...
 
-def decompress(input: bytes, min_size: int) -> int:
+def decompress(input: bytes, min_size: int) -> bytes:
     """
     Decompress the input block bytes.
 
