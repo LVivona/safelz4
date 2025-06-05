@@ -1,9 +1,31 @@
 import os
 import io
-from typing import Optional, Union, Any, Literal, overload
+from typing import Optional, Union, Any, Literal, Final, overload
 from typing_extensions import Self
 
 from enum import IntEnum, Enum
+
+FLG_RESERVED_MASK: Final[int]
+FLG_VERSION_MASK: Final[int]
+FLG_SUPPORTED_VERSION_BITS: Final[int]
+
+FLG_INDEPENDENT_BLOCKS: Final[int]
+FLG_BLOCK_CHECKSUMS: Final[int]
+FLG_CONTENT_SIZE: Final[int]
+FLG_CONTENT_CHECKSUM: Final[int]
+FLG_DICTIONARY_ID: Final[int]
+
+BD_RESERVED_MASK: Final[int]
+BD_BLOCK_SIZE_MASK: Final[int]
+BD_BLOCK_SIZE_MASK_RSHIFT: Final[int]
+
+LZ4F_MAGIC_NUMBER: Final[int]
+LZ4F_LEGACY_MAGIC_NUMBER: Final[int]
+
+MAGIC_NUMBER_SIZE: Final[int]
+MIN_FRAME_INFO_SIZE: Final[int]
+MAX_FRAME_INFO_SIZE: Final[int]
+BLOCK_INFO_SIZE: Final[int]
 
 class BlockMode(Enum):
     """
