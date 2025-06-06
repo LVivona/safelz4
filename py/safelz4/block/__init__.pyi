@@ -59,7 +59,7 @@ def compress_with_dict(input: bytes, ext_dict: bytes) -> bytes:
     """
     ...
 
-def compress_prepend_size_with_dict():
+def compress_prepend_size_with_dict(input: bytes, ext_dict: bytes) -> bytes:
     """
     Compress input bytes using the proved dict of bytes, size is pre-appended.
 
