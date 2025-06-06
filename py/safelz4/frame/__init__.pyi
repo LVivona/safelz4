@@ -1,7 +1,7 @@
 import os
 import io
-from typing import Optional, Union, Any, Literal, Final, overload
-from typing_extensions import Self
+from typing import Optional, Union, Any, Literal, Final, Iterable, overload
+from typing_extensions import Self, Buffer
 
 from enum import IntEnum, Enum
 
@@ -522,11 +522,169 @@ class FrameEncoderWriter:
         """
         ...
 
+class DecoderReaderWrapper(io.BufferedIOBase):
+    """
+    Wrapper that combines io.BufferedIOBase interface with FrameDecoderReader
+    functionality. This makes the LZ4 decoder compatible with Python's
+    standard I/O system.
+    """
+
+    _inner: FrameDecoderReader
+
+    def __init__(self, filename: str) -> None: ...
+
+    # BufferedIOBase required methods
+    def readable(self) -> bool:
+        """Returns True since this is a readable stream."""
+        ...
+    def writable(self) -> bool:
+        """Returns False since this is read-only."""
+        ...
+    def seekable(self) -> bool:
+        """Returns True if seeking is supported."""
+        ...
+    def tell(self) -> int:
+        """Returns current position in block stream."""
+        ...
+    def seek(self, pos: int, whence: int = ...) -> int:
+        """
+        Seek to position in the stream.
+
+        Args:
+            pos: Position to seek to
+            whence: How to interpret pos (SEEK_SET, SEEK_CUR, SEEK_END)
+
+        Returns:
+            New absolute position
+
+        Raises:
+            ValueError: If the file is closed
+            io.UnsupportedOperation: If seeking is not supported
+        """
+        ...
+    def read(self, size: Optional[int] = ...) -> bytes:
+        """
+        Read and return up to size bytes.
+
+        Args:
+            size: Number of bytes to read. If -1 or None,
+                read all remaining data.
+
+        Returns:
+            block read from the stream return sized bytes of said block
+
+        Raises:
+            ValueError: If the file is closed
+        """
+        ...
+    def read1(self, size: int = ...) -> bytes:
+        """Read and return up to size bytes from the stream."""
+        ...
+    def readinto(self, b: Buffer) -> Optional[int]:
+        """
+        Read data into a pre-allocated buffer.
+
+        Args:
+            b: Buffer to read into (must support buffer protocol)
+
+        Returns:
+            Number of bytes read, or None if EOF
+
+        Raises:
+            ValueError: If the file is closed
+        """
+        ...
+    def readinto1(self, b: Buffer) -> int:
+        """Read data into buffer, single call to underlying raw stream."""
+        ...
+
+class EncoderWriterWrapper(io.BufferedIOBase):
+    """
+    Wrapper that combines io.BufferedIOBase interface with
+    FrameEncoderWriter functionality. This makes the LZ4
+    encoder compatible with Python's standard I/O system.
+    """
+
+    _inner: FrameEncoderWriter
+
+    def __init__(
+        self,
+        filename: str,
+        block_size: BlockSize = ...,
+        block_mode: BlockMode = ...,
+        block_checksums: Optional[bool] = ...,
+        dict_id: Optional[bool] = ...,
+        content_checksum: Optional[bool] = ...,
+        content_size: Optional[int] = ...,
+        legacy_frame: Optional[bool] = ...,
+    ) -> None: ...
+
+    # BufferedIOBase required methods
+    def readable(self) -> bool:
+        """Returns False since this is write-only."""
+        ...
+    def writable(self) -> bool:
+        """Returns True since this is a writable stream."""
+        ...
+    def seekable(self) -> bool:
+        """
+        Returns False since writing streams typically
+        don't support seeking.
+        """
+        ...
+    def tell(self) -> int:
+        """Returns current position in the stream."""
+        ...
+    def write(self, data: Union[bytes, bytearray, memoryview]) -> int:
+        """
+        Write data to the stream.
+
+        Args:
+            data: Data to write (bytes-like object)
+
+        Returns:
+            Number of bytes written
+
+        Raises:
+            ValueError: If the file is closed
+            TypeError: If data is not a bytes-like object
+        """
+        ...
+    def writelines(
+        self, lines: Iterable[Union[bytes, bytearray, memoryview]]
+    ) -> None:
+        """
+        Write a list of bytes-like objects to the stream.
+
+        Args:
+            lines: Iterable of bytes-like objects
+
+        Raises:
+            ValueError: If the file is closed
+        """
+        ...
+    def flush(self) -> None:
+        """
+        Flush the internal buffer to disk.
+
+        Raises:
+            ValueError: If the file is closed
+        """
+        ...
+    def close(self) -> None:
+        """
+        Close the stream and flush any remaining data.
+
+        Raises:
+            IOError: If flushing fails during close
+        """
+        ...
+
 @overload
 def open(
     filename: Union[str, os.PathLike],
     mode: Optional[Literal["rb", "rb|lz4", "wb", "wb|lz4"]] = None,
-) -> Union[FrameDecoderReader, FrameEncoderWriter]: ...
+) -> Union[DecoderReaderWrapper, EncoderWriterWrapper]: ...
 @overload
 def open(
     filename: Union[str, os.PathLike],
@@ -534,13 +692,13 @@ def open(
     block_size: BlockSize = BlockSize.Auto,
     block_mode: BlockMode = BlockMode.Independent,
     block_checksums: Optional[bool] = None,
-    dict_id: Optional[bool] = None,
+    dict_id: Optional[int] = None,
     content_checksum: Optional[bool] = None,
     content_size: Optional[int] = None,
     legacy_frame: Optional[bool] = None,
-) -> FrameEncoderWriter: ...
+) -> EncoderWriterWrapper: ...
 @overload
 def open(
     filename: Union[str, os.PathLike],
     mode: Optional[Literal["rb", "rb|lz4"]] = None,
-) -> FrameDecoderReader: ...
+) -> DecoderReaderWrapper: ...
