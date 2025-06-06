@@ -6,9 +6,7 @@ from argparse import FileType
 
 import safelz4
 
-from typing import Literal, Final
-
-DEFAULT_BUFFER_READ: Final = 8
+from typing import Literal
 
 
 def simple_blocksize_type(value: str) -> safelz4.BlockSize:
@@ -49,10 +47,10 @@ def _parse_argument() -> argparse.Namespace:
         prog="slz4",
         description="LZ4 compression and decompression utility",
         epilog="Examples:\n"
-        "  %(prog)s -c -b input.txt output.bin\n"
-        "  %(prog)s -d -f compressed.lz4 output.txt\n"
-        "  %(prog)s -c -f largefile.bin compressed.lz4\n"
-        "cat input.txt |  %(prog)s -c -f -o compressed.lz4",
+        "  %(prog)s -cb input.txt output.lz4\n"
+        "  %(prog)s -df output.lz4 output.txt\n"
+        "  %(prog)s -cf dickens.txy dickens.lz4\n"
+        "cat input.txt |  %(prog)s -cfo input.txt.lz4",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
@@ -112,7 +110,7 @@ def _parse_argument() -> argparse.Namespace:
         "-s",
         "--size",
         type=int,
-        default=0,  # Changed from False to 0
+        default=0,
         help="If size is not included set decompression size",
     )
 
@@ -141,7 +139,7 @@ def _parse_argument() -> argparse.Namespace:
         help="suffix for compressed files (default: .lz4)",
     )
 
-    # IO files
+    # infile files
     parser.add_argument(
         "infile",
         nargs="?",
@@ -165,96 +163,101 @@ def _parse_argument() -> argparse.Namespace:
 
 
 def main():
-    args = _parse_argument()
+    """entry cli function"""
+    try:
+        args = _parse_argument()
+        mode = _handle_args_mode(args.compress, args.decompress)
 
-    mode = _handle_args_mode(args.compress, args.decompress)
-
-    if args.block:
-        buffer = args.infile.read(-1)
-        output = None
-        if mode == "c":
-            if args.include_size:
-                output = safelz4.block.compress_prepend_size(buffer)
-            else:
-                output = safelz4.block.compress(buffer)
-        else:
-            if args.include_size:
-                output = safelz4.block.decompress_size_prepended(buffer)
-            else:
-                output = safelz4.block.decompress(buffer, args.size)
-
-        args.output.write(output)
-    else:
-        # Check if using stdin (not stdout)
-        if args.infile.name == "<stdin>":
+        if args.block:
             buffer = args.infile.read(-1)
             output = None
             if mode == "c":
-                output = safelz4.compress(buffer)
+                if args.include_size:
+                    output = safelz4.block.compress_prepend_size(buffer)
+                else:
+                    output = safelz4.block.compress(buffer)
             else:
-                output = safelz4.decompress(buffer)
+                if args.include_size:
+                    output = safelz4.block.decompress_size_prepended(buffer)
+                else:
+                    output = safelz4.block.decompress(buffer, args.size)
 
-            # write out to BinaryIO
             args.output.write(output)
         else:
-            file = None
-            if mode == "c":
-                # Compression: read from input file, write to compressed file
-                block_size = args.block_size
-                block_mode = (
-                    safelz4.BlockMode.Independent
-                    if args.block_independence
-                    else safelz4.BlockMode.Linked
-                )
-                block_checksums = args.block_checksums  # Fixed variable name
-                content_checksum = args.content_checksum
-                legacy_frame = args.legacy_frame
-
-                file = safelz4.open(
-                    args.output.name,  # Fixed variable name
-                    mode="wb",
-                    block_size=block_size,
-                    block_mode=block_mode,
-                    block_checksums=block_checksums,
-                    content_checksum=content_checksum,
-                    legacy_frame=legacy_frame,
-                )
-                if args.buffer_size == -1:
-                    buffer = args.infile.read(-1)
-                    file.write(buffer)
+            # Check if using stdin (not stdout)
+            if args.infile.name == "<stdin>":
+                buffer = args.infile.read(-1)
+                output = None
+                if mode == "c":
+                    output = safelz4.compress(buffer)
                 else:
-                    while content := args.infile.read(
-                        args.buffer_size
-                    ):  # Fixed variable access
-                        file.write(content)
+                    output = safelz4.decompress(buffer)
+
+                # write out to BinaryIO
+                args.output.write(output)
             else:
-                # Decompression: read from compressed file, write to output
-                file = safelz4.open(args.infile.name, mode="rb")
-                if args.buffer_size == -1:
-                    buffer = file.read(-1)
-                    args.output.write(buffer)
+                file = None
+                if mode == "c":
+                    # Compression: read from input file, write to compressed
+                    # file.
+                    block_size = args.block_size
+                    block_mode = (
+                        safelz4.BlockMode.Independent
+                        if args.block_independence
+                        else safelz4.BlockMode.Linked
+                    )
+                    block_checksums = (
+                        args.block_checksums
+                    )  # Fixed variable name
+                    content_checksum = args.content_checksum
+                    legacy_frame = args.legacy_frame
+
+                    file = safelz4.open(
+                        args.output.name,  # Fixed variable name
+                        mode="wb",
+                        block_size=block_size,
+                        block_mode=block_mode,
+                        block_checksums=block_checksums,
+                        content_checksum=content_checksum,
+                        legacy_frame=legacy_frame,
+                    )
+                    if args.buffer_size == -1:
+                        buffer = args.infile.read(-1)
+                        file.write(buffer)
+                    else:
+                        while content := args.infile.read(args.buffer_size):
+                            file.write(content)
                 else:
-                    while content := file.read(args.buffer_size):
-                        args.output.write(content)  # Fixed variable name
+                    # Decompression: read from compressed file, write to output
+                    file = safelz4.open(args.infile.name, mode="rb")
+                    if args.buffer_size == -1:
+                        buffer = file.read(-1)
+                        args.output.write(buffer)
+                    else:
+                        while content := file.read(args.buffer_size):
+                            args.output.write(content)  # Fixed variable name
 
-            # close file
-            file.close()
-            args.infile.close()
-            args.output.close()
+                # close file
+                file.close()
+                args.infile.close()
+                args.output.close()
 
-    # Handle file extension/suffix logic
-    if args.output.name != "<stdout>":  # Fixed condition
-        output_file, ext = _os.path.splitext(args.output.name)
-        suffix = args.suffix
+        # Handle file extension/suffix logic
+        if args.output.name != "<stdout>":  # Fixed condition
+            output_file, ext = _os.path.splitext(args.output.name)
+            suffix = args.suffix
 
-        # Add proper suffix if not present
-        if not ext == suffix:
-            new_name = output_file + suffix
-            _os.replace(args.output.name, new_name)
+            # Add proper suffix if not present
+            if not ext == suffix:
+                new_name = output_file + suffix
+                _os.replace(args.output.name, new_name)
 
-    # Remove input file if dispose flag is set
-    if args.dispose and args.infile.name != "<stdin>":
-        _os.remove(args.infile.name)
+        # Remove input file if dispose flag is set
+        if args.dispose and args.infile.name != "<stdin>":
+            _os.remove(args.infile.name)
+    except Exception as e:
+        print(e)
+        return 1
 
 
 if __name__ == "__main__":
