@@ -90,7 +90,7 @@ impl From<BlockMode> for PyBlockMode {
 #[pyclass(eq, eq_int, name = "BlockSize")]
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 enum PyBlockSize {
-    /// Will detect optimal frame size based on the size of the first write call
+    /// Will detect optimal frame size based on the size of the first write call.
     #[default]
     Auto = 0,
     /// The default block size.
@@ -107,6 +107,7 @@ enum PyBlockSize {
 
 #[pymethods]
 impl PyBlockSize {
+    /// Try to find optimal size based on passed buffer length.
     #[staticmethod]
     pub fn from_buf_length(buf_len: usize) -> Self {
         let mut blocksize = PyBlockSize::Max4MB;
@@ -120,6 +121,7 @@ impl PyBlockSize {
         PyBlockSize::Max64KB
     }
 
+    /// Return the size in bytes
     pub fn get_size(&self) -> PyResult<usize> {
         match self {
             PyBlockSize::Auto => Err(LZ4Exception::new_err(
@@ -243,6 +245,9 @@ impl PyFrameInfo {
         }
     }
 
+    /// Build a default `FrameInfo` class.
+    /// Returns:
+    ///     (`FrameInfo`): default object.
     #[staticmethod]
     fn default() -> Self {
         Self {
@@ -250,6 +255,8 @@ impl PyFrameInfo {
         }
     }
 
+    /// Read the size of the frame header info.
+    ///
     /// Since the header size is dynamic we can read the size of the header before
     /// we build our frame class.
     ///
@@ -298,6 +305,7 @@ impl PyFrameInfo {
         Ok(required)
     }
 
+    /// Read bytes info to construct frame header.
     #[staticmethod]
     fn read_header_info(mut input: &[u8]) -> PyResult<PyFrameInfo> {
         let original_input = input;
@@ -617,11 +625,11 @@ fn compress_with_info<'py>(
 /// Args:
 ///     input (`bytes`):
 ///         A byte containing LZ4-compressed data (in frame format).
-///         Typically obtained from a prior call to an `compress`, `compress_with_info` or read from
-///         a compressed file `compress_into_file`, or `compress_into_file_with_info`.
+///         Typically obtained from a prior call to an `compress` or read from
+///         a compressed file `compress_into_file`.
 /// Returns:
 ///     (`bytes`):
-///         The decompressed (original) representation of the input bytes.
+///         the decompressed (original) representation of the input bytes.
 #[pyfunction]
 #[pyo3(signature = (input))]
 fn decompress<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes>> {
@@ -642,6 +650,13 @@ fn decompress<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyByt
 /// Returns:
 ///    (`bytes`):
 ///        The decompressed (original) representation of the input bytes.
+/// Example:
+///
+/// ```python
+/// from safelz4 import decompress
+///
+/// output = decompress("datafile.lz4")
+/// ```
 #[pyfunction]
 #[pyo3(signature = (filename))]
 fn decompress_file(py: Python<'_>, filename: PathBuf) -> PyResult<PyBound<'_, PyBytes>> {
@@ -1047,22 +1062,42 @@ impl PyFrameDecoderReader {
         })
     }
 
+    ///
+    pub fn mode(&self) -> PyResult<&str> {
+        Ok("rb")
+    }
+
+    /// Returns the offset after the LZ4 frame header.
+    /// Returns:
+    ///     (`int`): Offset in bytes to the start of the first data block.
     pub fn offset(&self) -> PyResult<usize> {
         Ok(self.offset)
     }
 
+    /// Returns the content size specified in the LZ4 frame header.
+    /// Returns:
+    ///     (`Optional[int]`): Content size if present, or None.
     pub fn content_size(&self) -> PyResult<Option<u64>> {
         self.frame_info.get_content_size()
     }
 
+    /// Returns the block size used in the LZ4 frame.
+    /// Returns:
+    ///     (`BlockSize`): Enum representing the block size.
     pub fn block_size(&self) -> PyResult<PyBlockSize> {
         self.frame_info.get_block_size()
     }
 
+    /// Checks if block checksums are enabled for this frame.
+    /// Returns:
+    ///     (`bool`): True if block checksums are enabled, False otherwise.
     pub fn block_checksum(&self) -> PyResult<bool> {
         self.frame_info.get_block_checksums()
     }
 
+    /// Returns a copy of the parsed frame header.
+    /// Returns:
+    ///     (`FrameInfo`): Frame header metadata object.
     pub fn frame_info(&self) -> PyResult<PyFrameInfo> {
         Ok(self.frame_info)
     }
@@ -1075,6 +1110,24 @@ impl PyFrameDecoderReader {
         }
     }
 
+    /// Reads and returns a decompressed block of the specified size.
+    /// This method attempts to read a block of compressed data
+    /// and decompress it into the desired size. It is typically used
+    /// when working with framed compression formats such as LZ4.
+    /// Args:
+    ///     size (`int`): The number of bytes to return after decompression.
+    /// Returns:
+    ///     (`bytes`): A decompressed byte string of the requested size.
+    /// Raises:
+    ///     (`ReadError`):
+    ///         Raised if the input stream cannot be read or is incomplete.
+    ///     (`DecompressionError`):
+    ///         Raised if the source buffer cannot be decompressed
+    ///         into the destination buffer, typically due to corrupt or
+    ///         malformed input.
+    ///     (`LZ4Exception`):
+    ///         Raised if a block checksum does not match the expected value,
+    ///         indicating potential data corruption.
     #[pyo3(signature = (size = -1))]
     pub fn read<'py>(
         &mut self,
@@ -1122,12 +1175,14 @@ impl PyFrameDecoderReader {
         self.inner = None
     }
 
-    /// enter the context manager.
+    /// Context manager entry — returns self.
+    /// Returns:
+    ///     (`FrameDecoderReader`): The reader instance itself.
     pub fn __enter__(slf: Py<Self>) -> Py<Self> {
         slf
     }
 
-    /// exit the context manager
+    /// Context manager exit
     pub fn __exit__(&mut self, _exc_type: PyObject, _exc_value: PyObject, _traceback: PyObject) {
         // INFO: by setting the inner storage to `None` we drop all the memeory
         //       the mmap has allocated.
@@ -1195,8 +1250,12 @@ impl PyFrameEncoderWriter {
         Ok(Self { offset: 0, inner })
     }
 
+    pub fn mode(&self) -> PyResult<&str> {
+        Ok("wb")
+    }
+
     /// current total bytes written into writer.
-    fn bytes_written(&self) -> PyResult<usize> {
+    fn offset(&self) -> PyResult<usize> {
         Ok(self.offset)
     }
 

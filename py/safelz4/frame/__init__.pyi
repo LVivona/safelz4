@@ -61,8 +61,12 @@ class BlockSize(IntEnum):
     Max8MB = 8
 
     @staticmethod
-    def from_buf_length(buf_len: int): ...
-    def get_size(self) -> int: ...
+    def from_buf_length(buf_len: int):
+        """Try to find optimal size based on passed buffer length."""
+        ...
+    def get_size(self) -> int:
+        """Return the size in bytes"""
+        ...
 
 class FrameInfo:
     """
@@ -98,10 +102,10 @@ class FrameInfo:
         ...
     @staticmethod
     def read_header_info(input: bytes) -> Self:
-        """Read header info to construct header."""
+        """Read bytes info to construct frame header."""
         ...
     def read_header_size(input: bytes) -> Self:
-        """Read the size of the header info"""
+        """Read the size of the frame header info"""
         ...
     @property
     def block_checksums(self) -> bool: ...
@@ -345,6 +349,7 @@ class FrameDecoderReader:
     """
 
     def __new__(self, filename: str) -> Self: ...
+    def mode(self) -> Literal["rb", "wb"]: ...
     def offset(self) -> int:
         """
         Returns the offset after the LZ4 frame header.

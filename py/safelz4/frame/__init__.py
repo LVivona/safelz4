@@ -240,7 +240,7 @@ class EncoderWriterWrapper(io.BufferedIOBase):
 
     def tell(self) -> int:
         """Returns current position in the stream."""
-        return self.offset()
+        return self._inner.offset()
 
     def write(self, data: Union[bytes, bytearray, memoryview]) -> int:
         """
@@ -295,7 +295,7 @@ class EncoderWriterWrapper(io.BufferedIOBase):
         Raises:
             ValueError: If the file is closed
         """
-        if self.closed:
+        if self._inner.closed:
             raise ValueError("I/O operation on closed file")
         self._inner.flush()
 
@@ -306,7 +306,7 @@ class EncoderWriterWrapper(io.BufferedIOBase):
         Raises:
             IOError: If flushing fails during close
         """
-        if not self.closed:
+        if not self._inner.closed:
             self._inner.close()
 
 
