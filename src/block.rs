@@ -37,7 +37,6 @@ fn compress<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound<'py, PyBytes
 /// Compress the input bytes using LZ4 and prepend the original
 /// size as a little-endian u32. This is compatible with
 /// `decompress_size_prepended`.
-///
 /// Args:
 ///     input (`bytes`):
 ///         Fixed set of bytes to be compressed.
@@ -55,8 +54,7 @@ fn compress_prepend_size<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound
 }
 
 /// Compress all bytes of input into the output array
-/// assuming size its known.
-/// 
+/// assuming size its known.    
 /// Args:
 ///     input (`bytes`):
 ///         Fixed set of bytes to be compressed.
@@ -116,7 +114,6 @@ fn compress_prepend_size_with_dict<'py>(
 /// Decompress input bytes into the provided output buffer.
 /// The output buffer must be preallocated with enough space
 /// for the uncompressed data.
-///
 /// Args:
 ///     buffer (`bytes`):
 ///         Fixed set of bytes to be decompressed.
@@ -135,7 +132,6 @@ fn decompress_into(input: &[u8], output: PyBound<'_, PyByteArray>) -> PyResult<u
 }
 
 /// Decompress the input block bytes.
-/// 
 /// Args:
 ///     input (`bytes`)
 ///         Fixed set of bytes to be decompressed
@@ -178,7 +174,6 @@ fn decompress_size_prepended<'py>(
 
 /// Decompress input bytes using a user-provided dictionary of
 /// bytes.
-/// 
 /// Args:
 ///     input (`bytes`):
 ///         Fixed set of bytes to be decompressed.
@@ -204,7 +199,6 @@ fn decompress_with_dict<'py>(
 
 /// Decompress input bytes using a user-provided dictionary
 /// of bytes, size is already pre-appended.
-/// 
 /// Args:
 ///     input (`bytes`):
 ///         Fixed set of bytes to be decompressed.
