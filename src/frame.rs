@@ -1062,7 +1062,7 @@ impl PyFrameDecoderReader {
         })
     }
 
-    ///
+    /// Return mode of the reader.
     pub fn mode(&self) -> PyResult<&str> {
         Ok("rb")
     }
@@ -1219,6 +1219,7 @@ impl PyFrameEncoderWriter {
 impl PyFrameEncoderWriter {
     #[new]
     #[pyo3(signature = (filename, block_size, block_mode, block_checksums = None, dict_id = None, content_checksum = None, content_size = None, legacy_frame = None))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         filename: PathBuf,
         block_size: PyBlockSize,
