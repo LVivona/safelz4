@@ -453,7 +453,15 @@ class FrameEncoderWriter:
     """
 
     def __new__(
-        self, filename: str, info: Optional[FrameInfo] = None
+        self,
+        filename: str,
+        block_size: BlockSize = ...,
+        block_mode: BlockMode = ...,
+        block_checksums: Optional[bool] = ...,
+        dict_id: Optional[int] = ...,
+        content_checksum: Optional[bool] = ...,
+        content_size: Optional[int] = ...,
+        legacy_frame: Optional[bool] = ...,
     ) -> Self: ...
     def offset(self) -> int:
         """
@@ -613,7 +621,7 @@ class EncoderWriterWrapper(io.BufferedIOBase):
         block_size: BlockSize = ...,
         block_mode: BlockMode = ...,
         block_checksums: Optional[bool] = ...,
-        dict_id: Optional[bool] = ...,
+        dict_id: Optional[int] = ...,
         content_checksum: Optional[bool] = ...,
         content_size: Optional[int] = ...,
         legacy_frame: Optional[bool] = ...,
