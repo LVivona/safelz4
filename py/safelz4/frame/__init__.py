@@ -316,7 +316,7 @@ def open(
     block_size: _frame.BlockSize = BlockSize.Auto,
     block_mode: _frame.BlockMode = BlockMode.Independent,
     block_checksums: Optional[bool] = None,
-    dict_id: Optional[bool] = None,
+    dict_id: Optional[int] = None,
     content_checksum: Optional[bool] = None,
     content_size: Optional[int] = None,
     legacy_frame: Optional[bool] = None,
