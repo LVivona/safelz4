@@ -681,6 +681,7 @@ fn decompress_file(py: Python<'_>, filename: PathBuf) -> PyResult<PyBound<'_, Py
 pub enum LZ4FileMode {
     #[default]
     READ_BYTES,
+    READ_UNCOMPRESSED_BYTES,
     WRITE_BYTES,
 }
 
@@ -689,6 +690,7 @@ impl TryFrom<&str> for LZ4FileMode {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
+            "r" => Ok(LZ4FileMode::READ_UNCOMPRESSED_BYTES),
             "rb" | "rb|lz4" => Ok(LZ4FileMode::READ_BYTES),
             "wb" | "wb|lz4" => Ok(LZ4FileMode::WRITE_BYTES),
             m => Err(PyValueError::new_err(format!(
@@ -704,6 +706,7 @@ impl From<LZ4FileMode> for &str {
         match value {
             LZ4FileMode::READ_BYTES => "rb",
             LZ4FileMode::WRITE_BYTES => "wb",
+            LZ4FileMode::READ_UNCOMPRESSED_BYTES => "r",
         }
     }
 }
@@ -744,6 +747,8 @@ impl BlockInfo {
 #[pyclass]
 #[pyo3(name = "FrameDecoderReader")]
 struct PyFrameDecoderReader {
+    /// mode (read bytes un/compressed)
+    mode: LZ4FileMode,
     /// file header
     frame_info: PyFrameInfo,
     /// from file header the offset of the blocks
@@ -1002,8 +1007,18 @@ impl PyFrameDecoderReader {
 #[pymethods]
 impl PyFrameDecoderReader {
     #[new]
-    #[pyo3(signature = (filename))]
-    pub fn new(filename: PathBuf) -> PyResult<Self> {
+    #[pyo3(signature = (filename, mode = None))]
+    pub fn new(filename: PathBuf, mode: Option<&str>) -> PyResult<Self> {
+        let mode = match mode {
+            Some("rb" | "rb|lz4") => LZ4FileMode::READ_BYTES,
+            Some("r") => LZ4FileMode::READ_UNCOMPRESSED_BYTES,
+            None => LZ4FileMode::READ_BYTES,
+            Some(value) => {
+                return Err(PyValueError::new_err(format!(
+                    "{value} is not a valid mode."
+                )))
+            }
+        };
         let file = File::open(&filename).map_err(|e| {
             PyIOError::new_err(format!("Failed to open file {:?}: {}", filename, e))
         })?;
@@ -1047,6 +1062,7 @@ impl PyFrameDecoderReader {
         let dst = Vec::with_capacity(dst_size);
 
         Ok(Self {
+            mode,
             frame_info,
             offset,
             src,
@@ -1064,7 +1080,7 @@ impl PyFrameDecoderReader {
 
     /// Return mode of the reader.
     pub fn mode(&self) -> PyResult<&str> {
-        Ok("rb")
+        Ok(self.mode.into())
     }
 
     /// Returns the offset after the LZ4 frame header.
@@ -1102,6 +1118,7 @@ impl PyFrameDecoderReader {
         Ok(self.frame_info)
     }
 
+    /// check if the inner is closed.
     #[getter]
     fn closed(&self) -> PyResult<bool> {
         match self.inner {
@@ -1155,6 +1172,7 @@ impl PyFrameDecoderReader {
                     let read_len = std::cmp::min(self.dst_end - self.dst_start, buf.len());
                     let dst_read_end = self.dst_start + read_len;
                     buf[..read_len].copy_from_slice(&self.dst[self.dst_start..dst_read_end]);
+
                     self.dst_start = dst_read_end;
 
                     return Ok(Some(PyBytes::new(py, &buf[..read_len])));
@@ -1251,8 +1269,9 @@ impl PyFrameEncoderWriter {
         Ok(Self { offset: 0, inner })
     }
 
+    /// return file mode
     pub fn mode(&self) -> PyResult<&str> {
-        Ok("wb")
+        Ok(LZ4FileMode::WRITE_BYTES.into())
     }
 
     /// current total bytes written into writer.

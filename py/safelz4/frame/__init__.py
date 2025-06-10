@@ -100,9 +100,11 @@ class DecoderReaderWrapper(io.BufferedIOBase):
     standard I/O system.
     """
 
-    def __init__(self, filename: str) -> None:
+    def __init__(
+        self, filename: str, mode: Optional[Literal["rb", "rb|lz4"]] = None
+    ) -> None:
         # Initialize the parent FrameDecoderReader
-        self._inner = _frame.FrameDecoderReader(filename)
+        self._inner = _frame.FrameDecoderReader(filename, mode)
 
     # BufferedIOBase required methods
     def readable(self) -> bool:
@@ -370,9 +372,9 @@ def open(
     ```
     """
     if mode is None:
-        return DecoderReaderWrapper(filename)
+        return DecoderReaderWrapper(filename, mode="rb")
     elif mode in ("rb", "rb|lz4"):
-        return DecoderReaderWrapper(filename)
+        return DecoderReaderWrapper(filename, mode)
     elif mode in ("wb", "wb|lz4"):
         return EncoderWriterWrapper(
             filename,

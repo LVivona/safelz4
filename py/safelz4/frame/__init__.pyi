@@ -539,9 +539,10 @@ class DecoderReaderWrapper(io.BufferedIOBase):
 
     _inner: FrameDecoderReader
 
-    def __init__(self, filename: str) -> None: ...
+    def __init__(
+        self, filename: str, mode: Optional[Literal["rb", "rb|lz4"]] = None
+    ) -> None: ...
 
-    # BufferedIOBase required methods
     def readable(self) -> bool:
         """Returns True since this is a readable stream."""
         ...
@@ -691,7 +692,7 @@ class EncoderWriterWrapper(io.BufferedIOBase):
 @overload
 def open(
     filename: Union[str, os.PathLike],
-    mode: Optional[Literal["rb", "rb|lz4", "wb", "wb|lz4"]] = None,
+    mode: Optional[Literal["r", "rb", "rb|lz4", "wb", "wb|lz4"]] = None,
 ) -> Union[DecoderReaderWrapper, EncoderWriterWrapper]: ...
 @overload
 def open(
@@ -708,5 +709,5 @@ def open(
 @overload
 def open(
     filename: Union[str, os.PathLike],
-    mode: Optional[Literal["rb", "rb|lz4"]] = None,
+    mode: Optional[Literal["r", "rb", "rb|lz4"]] = None,
 ) -> DecoderReaderWrapper: ...
