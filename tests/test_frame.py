@@ -224,7 +224,6 @@ def test_concurrent_compression():
     assert all(results), "Not all concurrent operations succeeded"
 
 
-# Input validation
 def test_frame_info_invalid_parameters():
     """Test FrameInfo with invalid parameters"""
     # This depends on your implementation - adjust as needed
@@ -273,6 +272,20 @@ def test_file_permission_errors():
         finally:
             # Restore permissions for cleanup
             os.chmod(tmp.name, 0o644)
+
+
+def test_closed_exeption_throw():
+
+    with tempfile.NamedTemporaryFile() as tmp:
+        # Make file read-only
+        # This should fail when trying to write
+        f = safelz4.open(tmp.name, "wb")
+        f.write(b"test")
+        assert f.closed == False
+        f.close()
+        assert f.closed == True
+        with pytest.raises((ValueError)):
+            f.write(b"hello world")
 
 
 def test_roundtrip_idempotency():
