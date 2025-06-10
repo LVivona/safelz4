@@ -1,7 +1,12 @@
 import os
 import io
 from typing import Optional, Union, Any, Literal, Final, Iterable, IO, overload
-from typing_extensions import Self, Buffer
+
+try:
+    from typing import Buffer, Self
+except ImportError:
+    # NOTE For Python < 3.12
+    from typing_extensions import Buffer, Self
 
 from enum import IntEnum, Enum
 
@@ -538,10 +543,19 @@ class DecoderReaderWrapper(io.BufferedIOBase):
     """
 
     _inner: FrameDecoderReader
+    _name: str
 
     def __init__(
         self, filename: str, mode: Optional[Literal["rb", "rb|lz4"]] = None
     ) -> None: ...
+    @property
+    def mode(self) -> str: ...
+    @property
+    def name(self) -> str: ...
+    @property
+    def closed(self) -> bool:
+        """Returns True if the file is closed."""
+        ...
     def readable(self) -> bool:
         """Returns True since this is a readable stream."""
         ...
@@ -614,6 +628,7 @@ class EncoderWriterWrapper(io.BufferedIOBase):
     """
 
     _inner: FrameEncoderWriter
+    _name: str
 
     def __init__(
         self,
@@ -626,8 +641,14 @@ class EncoderWriterWrapper(io.BufferedIOBase):
         content_size: Optional[int] = ...,
         legacy_frame: Optional[bool] = ...,
     ) -> None: ...
-
-    # BufferedIOBase required methods
+    @property
+    def mode(self) -> str: ...
+    @property
+    def name(self) -> str: ...
+    @property
+    def closed(self) -> bool:
+        """Returns True if the file is closed."""
+        ...
     def readable(self) -> bool:
         """Returns False since this is write-only."""
         ...
@@ -687,12 +708,17 @@ class EncoderWriterWrapper(io.BufferedIOBase):
             IOError: If flushing fails during close
         """
         ...
+    def __enter__(self) -> Self:
+        pass
+
+    def __exit__(self, type, value, traceback) -> None:
+        pass
 
 @overload
 def open(
     filename: Union[str, os.PathLike],
-    mode: Optional[Literal["r", "rb", "rb|lz4", "wb", "wb|lz4"]] = None,
-) -> IO[bytes]: ...
+    mode: Optional[Literal["rb", "rb|lz4", "wb", "wb|lz4"]] = None,
+) -> io.BufferedIOBase: ...
 @overload
 def open(
     filename: Union[str, os.PathLike],
@@ -708,5 +734,5 @@ def open(
 @overload
 def open(
     filename: Union[str, os.PathLike],
-    mode: Optional[Literal["r", "rb", "rb|lz4"]] = None,
+    mode: Optional[Literal["rb", "rb|lz4"]] = None,
 ) -> DecoderReaderWrapper: ...

@@ -677,12 +677,10 @@ fn decompress_file(py: Python<'_>, filename: PathBuf) -> PyResult<PyBound<'_, Py
 
 /// IO File mode.
 #[allow(non_camel_case_types)]
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum LZ4FileMode {
-    #[default]
-    READ_BYTES,
-    READ_UNCOMPRESSED_BYTES,
-    WRITE_BYTES,
+    READ_BYTES(String),
+    WRITE_BYTES(String),
 }
 
 impl TryFrom<&str> for LZ4FileMode {
@@ -690,9 +688,10 @@ impl TryFrom<&str> for LZ4FileMode {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
-            "r" => Ok(LZ4FileMode::READ_UNCOMPRESSED_BYTES),
-            "rb" | "rb|lz4" => Ok(LZ4FileMode::READ_BYTES),
-            "wb" | "wb|lz4" => Ok(LZ4FileMode::WRITE_BYTES),
+            mode @ "rb" => Ok(LZ4FileMode::READ_BYTES(mode.into())),
+            mode @ "rb|lz4" => Ok(LZ4FileMode::READ_BYTES(mode.into())),
+            mode @ "wb" => Ok(LZ4FileMode::WRITE_BYTES(mode.into())),
+            mode @ "wb|lz4" => Ok(LZ4FileMode::WRITE_BYTES(mode.into())),
             m => Err(PyValueError::new_err(format!(
                 "{:?} is not a valid file mode",
                 m
@@ -701,12 +700,11 @@ impl TryFrom<&str> for LZ4FileMode {
     }
 }
 
-impl From<LZ4FileMode> for &str {
+impl From<LZ4FileMode> for String {
     fn from(value: LZ4FileMode) -> Self {
         match value {
-            LZ4FileMode::READ_BYTES => "rb",
-            LZ4FileMode::WRITE_BYTES => "wb",
-            LZ4FileMode::READ_UNCOMPRESSED_BYTES => "r",
+            LZ4FileMode::READ_BYTES(mode) => mode,
+            LZ4FileMode::WRITE_BYTES(mode) => mode,
         }
     }
 }
@@ -1009,15 +1007,9 @@ impl PyFrameDecoderReader {
     #[new]
     #[pyo3(signature = (filename, mode = None))]
     pub fn new(filename: PathBuf, mode: Option<&str>) -> PyResult<Self> {
-        let mode = match mode {
-            Some("rb" | "rb|lz4") => LZ4FileMode::READ_BYTES,
-            Some("r") => LZ4FileMode::READ_UNCOMPRESSED_BYTES,
-            None => LZ4FileMode::READ_BYTES,
-            Some(value) => {
-                return Err(PyValueError::new_err(format!(
-                    "{value} is not a valid mode."
-                )))
-            }
+        let mode: LZ4FileMode = match mode {
+            Some(m) => m.try_into()?,
+            None => LZ4FileMode::READ_BYTES(String::from("rb")),
         };
         let file = File::open(&filename).map_err(|e| {
             PyIOError::new_err(format!("Failed to open file {:?}: {}", filename, e))
@@ -1079,8 +1071,8 @@ impl PyFrameDecoderReader {
     }
 
     /// Return mode of the reader.
-    pub fn mode(&self) -> PyResult<&str> {
-        Ok(self.mode.into())
+    pub fn mode(&self) -> PyResult<String> {
+        Ok(self.mode.clone().into())
     }
 
     /// Returns the offset after the LZ4 frame header.
@@ -1122,8 +1114,8 @@ impl PyFrameDecoderReader {
     #[getter]
     fn closed(&self) -> PyResult<bool> {
         match self.inner {
-            Some(_) => Ok(false),
             None => Ok(true),
+            _ => Ok(false),
         }
     }
 
@@ -1220,6 +1212,7 @@ fn vec_resize_and_get_mut(v: &mut Vec<u8>, start: usize, end: usize) -> &mut [u8
 #[pyo3(name = "FrameEncoderWriter")]
 struct PyFrameEncoderWriter {
     offset: usize,
+    mode: LZ4FileMode,
     inner: Option<FrameEncoder<BufWriter<File>>>,
 }
 
@@ -1236,10 +1229,11 @@ impl PyFrameEncoderWriter {
 #[pymethods]
 impl PyFrameEncoderWriter {
     #[new]
-    #[pyo3(signature = (filename, block_size, block_mode, block_checksums = None, dict_id = None, content_checksum = None, content_size = None, legacy_frame = None))]
+    #[pyo3(signature = (filename, mode, block_size, block_mode, block_checksums = None, dict_id = None, content_checksum = None, content_size = None, legacy_frame = None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         filename: PathBuf,
+        mode: Option<&str>,
         block_size: PyBlockSize,
         block_mode: PyBlockMode,
         block_checksums: Option<bool>,
@@ -1266,12 +1260,22 @@ impl PyFrameEncoderWriter {
         .into();
         let inner = Some(FrameEncoder::with_frame_info(frame_info, wtr));
 
-        Ok(Self { offset: 0, inner })
+        let mode = match mode {
+            Some(value) => value.try_into()?,
+            None => LZ4FileMode::WRITE_BYTES(String::from("wb")),
+        };
+
+        Ok(Self {
+            offset: 0,
+            inner,
+            mode,
+        })
     }
 
     /// return file mode
-    pub fn mode(&self) -> PyResult<&str> {
-        Ok(LZ4FileMode::WRITE_BYTES.into())
+    #[getter]
+    pub fn mode(&self) -> PyResult<String> {
+        Ok(self.mode.clone().into())
     }
 
     /// current total bytes written into writer.
@@ -1304,8 +1308,8 @@ impl PyFrameEncoderWriter {
     #[getter]
     fn closed(&self) -> PyResult<bool> {
         match self.inner {
-            Some(_) => Ok(false),
             None => Ok(true),
+            _ => Ok(false),
         }
     }
 
