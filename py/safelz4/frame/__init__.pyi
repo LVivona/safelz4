@@ -1,6 +1,6 @@
 import os
 import io
-from typing import Optional, Union, Any, Literal, Final, Iterable, overload
+from typing import Optional, Union, Any, Literal, Final, Iterable, IO, overload
 from typing_extensions import Self, Buffer
 
 from enum import IntEnum, Enum
@@ -542,7 +542,6 @@ class DecoderReaderWrapper(io.BufferedIOBase):
     def __init__(
         self, filename: str, mode: Optional[Literal["rb", "rb|lz4"]] = None
     ) -> None: ...
-
     def readable(self) -> bool:
         """Returns True since this is a readable stream."""
         ...
@@ -693,7 +692,7 @@ class EncoderWriterWrapper(io.BufferedIOBase):
 def open(
     filename: Union[str, os.PathLike],
     mode: Optional[Literal["r", "rb", "rb|lz4", "wb", "wb|lz4"]] = None,
-) -> Union[DecoderReaderWrapper, EncoderWriterWrapper]: ...
+) -> IO[bytes]: ...
 @overload
 def open(
     filename: Union[str, os.PathLike],
