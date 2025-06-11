@@ -745,6 +745,8 @@ impl BlockInfo {
 #[pyclass]
 #[pyo3(name = "FrameDecoderReader")]
 struct PyFrameDecoderReader {
+    /// name of the file.
+    name: PathBuf,
     /// mode (read bytes un/compressed)
     mode: LZ4FileMode,
     /// file header
@@ -1008,7 +1010,7 @@ impl PyFrameDecoderReader {
     #[pyo3(signature = (filename, mode = None))]
     pub fn new(filename: PathBuf, mode: Option<&str>) -> PyResult<Self> {
         let mode: LZ4FileMode = match mode {
-            Some(m) => m.try_into()?,
+            Some(value) => value.try_into()?,
             None => LZ4FileMode::READ_BYTES(String::from("rb")),
         };
         let file = File::open(&filename).map_err(|e| {
@@ -1054,6 +1056,7 @@ impl PyFrameDecoderReader {
         let dst = Vec::with_capacity(dst_size);
 
         Ok(Self {
+            name: filename,
             mode,
             frame_info,
             offset,
@@ -1070,44 +1073,16 @@ impl PyFrameDecoderReader {
         })
     }
 
+    #[getter]
+    /// return the name of the file
+    pub fn name(&self) -> PyResult<PathBuf> {
+        Ok(self.name.clone())
+    }
+
     /// Return mode of the reader.
+    #[getter]
     pub fn mode(&self) -> PyResult<String> {
         Ok(self.mode.clone().into())
-    }
-
-    /// Returns the offset after the LZ4 frame header.
-    /// Returns:
-    ///     (`int`): Offset in bytes to the start of the first data block.
-    pub fn offset(&self) -> PyResult<usize> {
-        Ok(self.offset)
-    }
-
-    /// Returns the content size specified in the LZ4 frame header.
-    /// Returns:
-    ///     (`Optional[int]`): Content size if present, or None.
-    pub fn content_size(&self) -> PyResult<Option<u64>> {
-        self.frame_info.get_content_size()
-    }
-
-    /// Returns the block size used in the LZ4 frame.
-    /// Returns:
-    ///     (`BlockSize`): Enum representing the block size.
-    pub fn block_size(&self) -> PyResult<PyBlockSize> {
-        self.frame_info.get_block_size()
-    }
-
-    /// Checks if block checksums are enabled for this frame.
-    /// Returns:
-    ///     (`bool`): True if block checksums are enabled, False otherwise.
-    pub fn block_checksum(&self) -> PyResult<bool> {
-        self.frame_info.get_block_checksums()
-    }
-
-    /// Returns a copy of the parsed frame header.
-    /// Returns:
-    ///     (`FrameInfo`): Frame header metadata object.
-    pub fn frame_info(&self) -> PyResult<PyFrameInfo> {
-        Ok(self.frame_info)
     }
 
     /// check if the inner is closed.
@@ -1117,6 +1092,54 @@ impl PyFrameDecoderReader {
             None => Ok(true),
             _ => Ok(false),
         }
+    }
+
+    /// Returns the offset after the LZ4 frame header.
+    /// Returns:
+    ///     (`int`): Offset in bytes to the start of the first data block.
+    #[getter]
+    pub fn offset(&self) -> PyResult<usize> {
+        Ok(self.offset)
+    }
+
+    /// Return the amounf of blocks that has been read.
+    /// Returns:
+    ///     (`int`): current block number.
+    #[getter]
+    pub fn current_block(&self) -> PyResult<usize> {
+        Ok(self.current_block)
+    }
+
+    /// Returns the content size specified in the LZ4 frame header.
+    /// Returns:
+    ///     (`Optional[int]`): Content size if present, or None.
+    #[getter]
+    pub fn content_size(&self) -> PyResult<Option<u64>> {
+        self.frame_info.get_content_size()
+    }
+
+    /// Returns the block size used in the LZ4 frame.
+    /// Returns:
+    ///     (`BlockSize`): Enum representing the block size.
+    #[getter]
+    pub fn block_size(&self) -> PyResult<PyBlockSize> {
+        self.frame_info.get_block_size()
+    }
+
+    /// Checks if block checksums are enabled for this frame.
+    /// Returns:
+    ///     (`bool`): True if block checksums are enabled, False otherwise.
+    #[getter]
+    pub fn block_checksum(&self) -> PyResult<bool> {
+        self.frame_info.get_block_checksums()
+    }
+
+    /// Returns a copy of the parsed frame header.
+    /// Returns:
+    ///     (`FrameInfo`): Frame header metadata object.
+    #[getter]
+    pub fn frame_info(&self) -> PyResult<PyFrameInfo> {
+        Ok(self.frame_info)
     }
 
     /// Reads and returns a decompressed block of the specified size.
@@ -1211,8 +1234,13 @@ fn vec_resize_and_get_mut(v: &mut Vec<u8>, start: usize, end: usize) -> &mut [u8
 #[pyclass]
 #[pyo3(name = "FrameEncoderWriter")]
 struct PyFrameEncoderWriter {
-    offset: usize,
+    /// name of the file.
+    name: PathBuf,
+    /// cached mode type.
     mode: LZ4FileMode,
+    /// writer offset counter.
+    offset: usize,
+    /// underlying Frame Encoder over file buffer writer.
     inner: Option<FrameEncoder<BufWriter<File>>>,
 }
 
@@ -1266,24 +1294,33 @@ impl PyFrameEncoderWriter {
         };
 
         Ok(Self {
+            name: filename,
+            mode,
             offset: 0,
             inner,
-            mode,
         })
     }
 
-    /// return file mode
+    #[getter]
+    /// return the name of the file
+    pub fn name(&self) -> PyResult<PathBuf> {
+        Ok(self.name.clone())
+    }
+
+    /// Return mode of the writer.
     #[getter]
     pub fn mode(&self) -> PyResult<String> {
         Ok(self.mode.clone().into())
     }
 
     /// current total bytes written into writer.
+    #[getter]
     fn offset(&self) -> PyResult<usize> {
         Ok(self.offset)
     }
 
     /// current frame info
+    #[getter]
     fn frame_info(&mut self) -> PyResult<PyFrameInfo> {
         Ok(self.inner()?.frame_info().clone().into())
     }
