@@ -1,14 +1,14 @@
 import os
 import io
-from typing import Union, Optional, Literal, Iterable, IO
+from typing import Union, Optional, Literal, IO, List
 from safelz4.error import LZ4Exception
 from safelz4._safelz4_rs import _frame
 
 try:
-    from typing import Buffer, Self
+    from typing import Self
 except ImportError:
     # NOTE For Python < 3.12
-    from typing_extensions import Buffer, Self
+    from typing_extensions import Self
 
 __all__ = [
     "FrameInfo",
@@ -98,19 +98,19 @@ def is_framefile(
         return False
 
 
-class DecoderReaderWrapper(IO[bytes]):
+class WrappedDecoderReader(IO[bytes]):
     """
-    Wrapper that combines io.BufferedIOBase interface with FrameDecoderReader
+    Wrapper that combines IO[bytes] interface with FrameDecoderReader
     functionality. This makes the LZ4 decoder compatible with Python's
     standard I/O system.
     """
 
     def __init__(
-        self, filename: str, mode: Optional[Literal["rb", "rb|lz4"]] = None
+        self,
+        filename: Union[os.PathLike, str],
+        mode: Optional[Literal["rb", "rb|lz4"]] = None,
     ) -> None:
-        # Initialize the parent FrameDecoderReader
         self._inner = _frame.FrameDecoderReader(filename, mode)
-        self._name = filename
 
     @property
     def mode(self) -> str:
@@ -118,14 +118,64 @@ class DecoderReaderWrapper(IO[bytes]):
 
     @property
     def name(self) -> str:
-        return self._name
+        """return name of the file."""
+        return str(self._inner.name)
 
     @property
     def closed(self) -> bool:
         """Returns True if the file is closed."""
         return self._inner.closed
 
-    # BufferedIOBase required methods
+    @property
+    def block_size(self) -> _frame.BlockSize:
+        """
+        Returns the block size used in the LZ4 frame.
+
+        Returns:
+            (`BlockSize`): Enum representing the block size.
+        """
+        return self._inner.block_size
+
+    @property
+    def content_size(self) -> Optional[int]:
+        """
+        Returns the content size specified in the LZ4 frame header.
+
+        Returns:
+            (`Optional[int]`): Content size if present, or None.
+        """
+        return self._inner.content_size
+
+    @property
+    def block_checksum(self) -> bool:
+        """
+        Checks if block checksums are enabled for this frame.
+
+        Returns:
+            (`bool`): True if block checksums are enabled, False otherwise.
+        """
+        return self._inner.block_checksum
+
+    @property
+    def frame_info(self) -> _frame.FrameInfo:
+        """
+        Returns a copy of the parsed frame header.
+
+        Returns:
+            (`FrameInfo`): Frame header metadata object.
+        """
+        return self._inner.frame_info
+
+    @property
+    def current_block(self) -> int:
+        """
+        Return the amounf of blocks that has been read.
+
+        Returns:
+            (`int`): current block number
+        """
+        return self._inner.current_block
+
     def readable(self) -> bool:
         """Returns True since this is a readable stream."""
         return not self._inner.closed
@@ -142,7 +192,7 @@ class DecoderReaderWrapper(IO[bytes]):
         """Returns current position in block stream."""
         return self._inner.offset()
 
-    def read(self, n : int = -1) -> bytes:
+    def read(self, n: int = -1) -> bytes:
         """
         Read and return up to size bytes.
 
@@ -162,20 +212,54 @@ class DecoderReaderWrapper(IO[bytes]):
             raise ValueError("I/O operation on closed file")
         return self._inner.read(n)
 
-    def read1(self, size: int = -1) -> bytes:
-        """Read and return up to size bytes from the stream."""
-        return self.read(size)
-
-    def readinto(self, b: Buffer) -> Optional[int]:
+    def readline(self, limit: int = -1) -> bytes:
         """
-        Read data into a pre-allocated buffer.
+        Read and return one line from the stream.
 
         Args:
-            b (`Buffer`):
-                Buffer to read into (must support buffer protocol)
+            limit (int, **optional**, default: -1):
+                Maximum number of bytes to read.
+                If -1, read until newline or EOF.
 
         Returns:
-            (`Optional[int]`): Number of bytes read, or None if EOF
+            bytes: A single line including the trailing newline character,
+                or empty bytes if EOF is reached.
+
+        Raises:
+            ValueError: If the file is closed
+        """
+        if self.closed:
+            raise ValueError("I/O operation on closed file")
+
+        line = b""
+        bytes_read = 0
+
+        while limit == -1 or bytes_read < limit:
+            # Read one byte at a time to find newline
+            chunk = self._inner.read(1)
+            if not chunk:  # EOF reached
+                break
+
+            line += chunk
+            bytes_read += 1
+
+            # Check if we found a newline
+            if chunk == b"\n":
+                break
+
+        return line
+
+    def readlines(self, hint: int = -1) -> List[bytes]:
+        """
+        Read and return a list of lines from the stream.
+
+        Args:
+            hint (`int`, **optional**, default: -1):
+                Approximate number of bytes to read.
+                If -1, read all lines.
+
+        Returns:
+            (`List[bytes]`): List of lines, each including trailing newline.
 
         Raises:
             (`ValueError`): If the file is closed
@@ -183,18 +267,22 @@ class DecoderReaderWrapper(IO[bytes]):
         if self.closed:
             raise ValueError("I/O operation on closed file")
 
-        data = self.read(len(b))
-        if not data:
-            return 0
+        lines = []
+        bytes_read = 0
 
-        bytes_read = len(data)
-        b[:bytes_read] = data
-        return bytes_read
+        while hint == -1 or bytes_read < hint:
+            line = self.readline()
+            if not line:  # EOF reached
+                break
 
-    def readinto1(self, b: Buffer) -> int:
-        """Read data into buffer, single call to underlying raw stream."""
-        result = self.readinto(b)
-        return result if result is not None else 0
+            lines.append(line)
+            bytes_read += len(line)
+
+            # If hint is specified and we've read enough, break
+            if hint != -1 and bytes_read >= hint:
+                break
+
+        return lines
 
     def close(self) -> None:
         """Close the stream."""
@@ -206,7 +294,7 @@ class DecoderReaderWrapper(IO[bytes]):
         Context manager entry — returns self.
 
         Returns:
-            (`DecoderReaderWrapper`): The reader wrapper instance itself.
+            (`WrappedDecoderReader`): The reader wrapper instance itself.
         """
         return self
 
@@ -215,22 +303,22 @@ class DecoderReaderWrapper(IO[bytes]):
         self._inner.__exit__(type, value, traceback)
 
     def __str__(self):
-        return f"<frame.EncoderWriterWrapper name={self._name}>"
+        return f"<frame.EncoderReader name={self._name}>"
 
     def __repr__(self):
-        return f"<frame.EncoderWriterWrapper name={self._name}>"
+        return f"<frame.EncoderReader name={self._name}>"
 
 
-class EncoderWriterWrapper(IO[bytes]):
+class WrappedEncoderWriter(IO[bytes]):
     """
-    Wrapper that combines io.BufferedIOBase interface with
+    Wrapper that combines IO[bytes] interface with
     FrameEncoderWriter functionality. This makes the LZ4
     encoder compatible with Python's standard I/O system.
     """
 
     def __init__(
         self,
-        filename: str,
+        filename: Union[os.PathLike, str],
         mode: Literal["wb", "wb|lz4"],
         block_size: _frame.BlockSize = BlockSize.Auto,
         block_mode: _frame.BlockMode = BlockMode.Independent,
@@ -259,14 +347,20 @@ class EncoderWriterWrapper(IO[bytes]):
 
     @property
     def name(self) -> str:
-        return self._name
+        return str(self._inner.name)
 
     @property
     def closed(self) -> bool:
-        """Returns True if the file is closed."""
         return self._inner.closed
 
-    # BufferedIOBase required methods
+    @property
+    def offset(self) -> int:
+        return self._inner.offset
+
+    @property
+    def frame_info(self) -> _frame.FrameInfo:
+        return self._inner.frame_info
+
     def readable(self) -> bool:
         """Returns False since this is write-only."""
         return False
@@ -286,45 +380,39 @@ class EncoderWriterWrapper(IO[bytes]):
         """Returns current position in the stream."""
         return self._inner.offset()
 
-    def write(self, data: Union[bytes, bytearray, memoryview]) -> int:
+    def write(self, data: bytes) -> int:
         """
         Write data to the stream.
 
         Args:
-            data: Data to write (bytes-like object)
+            data (`bytes`): Data to write.
 
         Returns:
-            Number of bytes written
+            (`int`): Number of bytes written.
 
         Raises:
-            ValueError: If the file is closed
-            TypeError: If data is not a bytes-like object
+            (`ValueError`): If the file is closed.
+            (`TypeError`): If data is not a bytes-like object.
         """
         if self.closed:
             raise ValueError("I/O operation on closed file")
 
-        # Convert to bytes if necessary
-        if isinstance(data, (bytearray, memoryview)):
-            data = bytes(data)
-        elif not isinstance(data, bytes):
+        if not isinstance(data, bytes):
             raise TypeError(
                 f"Expected bytes-like object, got {type(data).__name__}"
             )
 
-        # Use the inner writer's write method
         return self._inner.write(data)
 
-    def writelines(
-        self, lines: Iterable[Union[bytes, bytearray, memoryview]]
-    ) -> None:
+    def writelines(self, lines: List[bytes]) -> None:
         """
         Write a list of bytes-like objects to the stream.
 
         Args:
-            lines: Iterable of bytes-like objects
+            lines (`List[bytes]`): Iterable of bytes-like objects.
 
         Raises:
-            ValueError: If the file is closed
+            (`ValueError`): If the file is closed.
         """
         if self.closed:
             raise ValueError("I/O operation on closed file")
@@ -337,7 +425,7 @@ class EncoderWriterWrapper(IO[bytes]):
         Flush the internal buffer to disk.
 
         Raises:
-            ValueError: If the file is closed
+            (`ValueError`): If the file is closed.
         """
         if self.closed:
             raise ValueError("I/O operation on closed file")
@@ -348,31 +436,31 @@ class EncoderWriterWrapper(IO[bytes]):
         Close the stream and flush any remaining data.
 
         Raises:
-            IOError: If flushing fails during close
+            (`IOError`): If flushing fails during close.
         """
         if not self.closed:
             self._inner.close()
 
     def __enter__(self) -> Self:
         """
-        Context manager entry — returns self.
+        Context manager entry.
 
         Returns:
-            (`EncoderWriterWrapper`): The writer wrapper instance itself.
+            (`WrappedEncoderWriter`): The writer wrapper instance itself.
         """
         return self
 
     def __exit__(self, type, value, traceback) -> None:
         """
-        Context manager exit — flushes and closes the writer.
+        Context manager exit.
         """
         self._inner.__exit__(type, value, traceback)
 
     def __str__(self):
-        return f"<frame.DecoderReaderWrapper name={self._name}>"
+        return f"<frame.WrappedDecoderReader name={self.name}>"
 
     def __repr__(self):
-        return f"<frame.DecoderReaderWrapper name={self._name}>"
+        return f"<frame.WrappedDecoderReader name={self.name}>"
 
 
 def open(
@@ -440,9 +528,9 @@ def open(
         mode = "rb"
 
     if mode in ("rb", "rb|lz4"):
-        return DecoderReaderWrapper(filename, mode)
+        return WrappedDecoderReader(filename, mode)
     elif mode in ("wb", "wb|lz4"):
-        return EncoderWriterWrapper(
+        return WrappedEncoderWriter(
             filename,
             mode,
             block_size,

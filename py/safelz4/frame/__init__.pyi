@@ -1,12 +1,12 @@
 import os
 import io
-from typing import Optional, Union, Any, Literal, Final, Iterable, IO, overload
+from typing import Optional, Union, Any, Literal, Final, List, IO, overload
 
 try:
-    from typing import Buffer, Self
+    from typing import Self
 except ImportError:
     # NOTE For Python < 3.12
-    from typing_extensions import Buffer, Self
+    from typing_extensions import Self
 
 from enum import IntEnum, Enum
 
@@ -353,8 +353,14 @@ class FrameDecoderReader:
 
     """
 
-    def __new__(self, filename: str) -> Self: ...
-    def mode(self) -> Literal["rb", "wb"]: ...
+    def __new__(self, filename: Union[os.PathLike, str]) -> Self: ...
+    @getattr
+    def closed(self) -> bool: ...
+    @getattr
+    def name(self) -> str: ...
+    @getattr
+    def mode(self) -> Literal["rb", "rb|lz4"]: ...
+    @getattr
     def offset(self) -> int:
         """
         Returns the offset after the LZ4 frame header.
@@ -363,6 +369,16 @@ class FrameDecoderReader:
             (`int`): Offset in bytes to the start of the first data block.
         """
         ...
+    @getattr
+    def current_block(self) -> int:
+        """
+        Return the amounf of blocks that has been read.
+
+        Returns:
+            (`int`): current block number.
+        """
+        ...
+    @getattr
     def content_size(self) -> Optional[int]:
         """
         Returns the content size specified in the LZ4 frame header.
@@ -371,6 +387,7 @@ class FrameDecoderReader:
             (`Optional[int]`): Content size if present, or None.
         """
         ...
+    @getattr
     def block_size(self) -> BlockSize:
         """
         Returns the block size used in the LZ4 frame.
@@ -379,6 +396,7 @@ class FrameDecoderReader:
             (`BlockSize`): Enum representing the block size.
         """
         ...
+    @getattr
     def block_checksum(self) -> bool:
         """
         Checks if block checksums are enabled for this frame.
@@ -387,6 +405,7 @@ class FrameDecoderReader:
             (`bool`): True if block checksums are enabled, False otherwise.
         """
         ...
+    @getattr
     def frame_info(self) -> FrameInfo:
         """
         Returns a copy of the parsed frame header.
@@ -421,11 +440,9 @@ class FrameDecoderReader:
         """
         ...
     def close(self) -> None: ...
-    @property
-    def closed(self) -> bool: ...
     def __enter__(self) -> Self:
         """
-        Context manager entry — returns self.
+        Context manager entry.
 
         Returns:
             (`FrameDecoderReader`): The reader instance itself.
@@ -459,7 +476,7 @@ class FrameEncoderWriter:
 
     def __new__(
         self,
-        filename: str,
+        filename: Union[os.PathLike, str],
         block_size: BlockSize = ...,
         block_mode: BlockMode = ...,
         block_checksums: Optional[bool] = ...,
@@ -468,6 +485,11 @@ class FrameEncoderWriter:
         content_size: Optional[int] = ...,
         legacy_frame: Optional[bool] = ...,
     ) -> Self: ...
+    @getattr
+    def closed(self) -> bool: ...
+    @getattr
+    def name(self) -> str: ...
+    @getattr
     def offset(self) -> int:
         """
         Returns the current write offset (total bytes written).
@@ -490,7 +512,7 @@ class FrameEncoderWriter:
             (`CompressionError`): If compression or writing fails.
         """
         ...
-    def mode(self) -> Literal["wb", "rb"]:
+    def mode(self) -> Literal["wb", "wb|lz4"]:
         """
         Return current mode
 
@@ -514,8 +536,6 @@ class FrameEncoderWriter:
             (`IOError`): If flushing fails during close.
         """
         ...
-    @property
-    def closed(self) -> bool: ...
     def __enter__(self) -> Self:
         """
         Context manager entry — returns self.
@@ -535,27 +555,36 @@ class FrameEncoderWriter:
         """
         ...
 
-class DecoderReaderWrapper(io.BufferedIOBase):
+class WrappedDecoderReader(IO[bytes]):
     """
-    Wrapper that combines io.BufferedIOBase interface with FrameDecoderReader
+    Wrapper that combines IO[bytes] interface with FrameDecoderReader
     functionality. This makes the LZ4 decoder compatible with Python's
     standard I/O system.
     """
 
     _inner: FrameDecoderReader
-    _name: str
 
     def __init__(
-        self, filename: str, mode: Optional[Literal["rb", "rb|lz4"]] = None
+        self,
+        filename: Union[os.PathLike, str],
+        mode: Optional[Literal["rb", "rb|lz4"]] = None,
     ) -> None: ...
     @property
     def mode(self) -> str: ...
     @property
     def name(self) -> str: ...
     @property
-    def closed(self) -> bool:
-        """Returns True if the file is closed."""
-        ...
+    def closed(self) -> bool: ...
+    @property
+    def block_size(self) -> BlockSize: ...
+    @property
+    def content_sized(self) -> Optional[int]: ...
+    @property
+    def block_checksum(self) -> bool: ...
+    @property
+    def frame_info(self) -> FrameInfo: ...
+    @property
+    def current_block(self) -> int: ...
     def readable(self) -> bool:
         """Returns True since this is a readable stream."""
         ...
@@ -568,23 +597,7 @@ class DecoderReaderWrapper(io.BufferedIOBase):
     def tell(self) -> int:
         """Returns current position in block stream."""
         ...
-    def seek(self, pos: int, whence: int = ...) -> int:
-        """
-        Seek to position in the stream.
-
-        Args:
-            pos: Position to seek to
-            whence: How to interpret pos (SEEK_SET, SEEK_CUR, SEEK_END)
-
-        Returns:
-            New absolute position
-
-        Raises:
-            ValueError: If the file is closed
-            io.UnsupportedOperation: If seeking is not supported
-        """
-        ...
-    def read(self, size: Optional[int] = ...) -> bytes:
+    def read(self, n: int = -1) -> bytes:
         """
         Read and return up to size bytes.
 
@@ -599,40 +612,53 @@ class DecoderReaderWrapper(io.BufferedIOBase):
             ValueError: If the file is closed
         """
         ...
-    def read1(self, size: int = ...) -> bytes:
-        """Read and return up to size bytes from the stream."""
-        ...
-    def readinto(self, b: Buffer) -> Optional[int]:
+    def readline(self, limit: int = -1) -> bytes:
         """
-        Read data into a pre-allocated buffer.
+        Read and return one line from the stream.
 
         Args:
-            b: Buffer to read into (must support buffer protocol)
+            limit (int, **optional**, default: -1):
+                Maximum number of bytes to read.
+                If -1, read until newline or EOF.
 
         Returns:
-            Number of bytes read, or None if EOF
+            bytes: A single line including the trailing newline character,
+                or empty bytes if EOF is reached.
 
         Raises:
             ValueError: If the file is closed
         """
         ...
-    def readinto1(self, b: Buffer) -> int:
-        """Read data into buffer, single call to underlying raw stream."""
-        ...
+    def readlines(self, hint: int = -1) -> List[bytes]:
+        """
+        Read and return a list of lines from the stream.
 
-class EncoderWriterWrapper(io.BufferedIOBase):
+        Args:
+            hint (int, optional): Approximate number of bytes to read.
+                                If -1, read all lines.
+
+        Returns:
+            List[bytes]: List of lines, each including trailing newline.
+
+        Raises:
+            ValueError: If the file is closed.
+        """
+        ...
+    def __str__(self): ...
+    def __repr__(self): ...
+
+class WrappedEncoderWriter(IO[bytes]):
     """
-    Wrapper that combines io.BufferedIOBase interface with
+    Wrapper that combines IO[bytes] interface with
     FrameEncoderWriter functionality. This makes the LZ4
     encoder compatible with Python's standard I/O system.
     """
 
     _inner: FrameEncoderWriter
-    _name: str
 
     def __init__(
         self,
-        filename: str,
+        filename: Union[os.PathLike, str],
         block_size: BlockSize = ...,
         block_mode: BlockMode = ...,
         block_checksums: Optional[bool] = ...,
@@ -646,9 +672,11 @@ class EncoderWriterWrapper(io.BufferedIOBase):
     @property
     def name(self) -> str: ...
     @property
-    def closed(self) -> bool:
-        """Returns True if the file is closed."""
-        ...
+    def closed(self) -> bool: ...
+    @property
+    def offset(self) -> int: ...
+    @property
+    def frame_info(self) -> FrameInfo: ...
     def readable(self) -> bool:
         """Returns False since this is write-only."""
         ...
@@ -664,32 +692,30 @@ class EncoderWriterWrapper(io.BufferedIOBase):
     def tell(self) -> int:
         """Returns current position in the stream."""
         ...
-    def write(self, data: Union[bytes, bytearray, memoryview]) -> int:
+    def write(self, data: bytes) -> int:
         """
         Write data to the stream.
 
         Args:
-            data: Data to write (bytes-like object)
+            (`data`): Data to write.
 
         Returns:
-            Number of bytes written
+            (`int`): Number of bytes written.
 
         Raises:
-            ValueError: If the file is closed
-            TypeError: If data is not a bytes-like object
+            (`ValueError`): If the file is closed.
+            (`TypeError`): If data is not a bytes-like object.
         """
         ...
-    def writelines(
-        self, lines: Iterable[Union[bytes, bytearray, memoryview]]
-    ) -> None:
+    def writelines(self, lines: List[bytes]) -> None:
         """
         Write a list of bytes-like objects to the stream.
 
         Args:
-            lines: Iterable of bytes-like objects
+            lines (`List[bytes]`): Iterable of bytes-like objects.
 
         Raises:
-            ValueError: If the file is closed
+            (`ValueError`): If the file is closed.
         """
         ...
     def flush(self) -> None:
@@ -697,7 +723,7 @@ class EncoderWriterWrapper(io.BufferedIOBase):
         Flush the internal buffer to disk.
 
         Raises:
-            ValueError: If the file is closed
+            (`ValueError`): If the file is closed.
         """
         ...
     def close(self) -> None:
@@ -705,20 +731,19 @@ class EncoderWriterWrapper(io.BufferedIOBase):
         Close the stream and flush any remaining data.
 
         Raises:
-            IOError: If flushing fails during close
+            (`IOError`): If flushing fails during close.
         """
         ...
-    def __enter__(self) -> Self:
-        pass
+    def __enter__(self) -> Self: ...
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[Any],
+    ) -> None: ...
+    def __str__(self): ...
+    def __repr__(self): ...
 
-    def __exit__(self, type, value, traceback) -> None:
-        pass
-
-@overload
-def open(
-    filename: Union[str, os.PathLike],
-    mode: Optional[Literal["rb", "rb|lz4", "wb", "wb|lz4"]] = None,
-) -> io.BufferedIOBase: ...
 @overload
 def open(
     filename: Union[str, os.PathLike],
@@ -730,9 +755,9 @@ def open(
     content_checksum: Optional[bool] = None,
     content_size: Optional[int] = None,
     legacy_frame: Optional[bool] = None,
-) -> EncoderWriterWrapper: ...
+) -> WrappedEncoderWriter: ...
 @overload
 def open(
     filename: Union[str, os.PathLike],
     mode: Optional[Literal["rb", "rb|lz4"]] = None,
-) -> DecoderReaderWrapper: ...
+) -> WrappedDecoderReader: ...
