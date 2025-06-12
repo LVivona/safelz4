@@ -1,4 +1,5 @@
 import os
+import math
 import pytest
 import safelz4
 from safelz4 import (
@@ -277,15 +278,34 @@ def test_file_permission_errors():
 def test_closed_exeption_throw():
 
     with tempfile.NamedTemporaryFile() as tmp:
-        # Make file read-only
-        # This should fail when trying to write
         f = safelz4.open(tmp.name, "wb")
         f.write(b"test")
         assert f.closed == False
         f.close()
         assert f.closed == True
         with pytest.raises((ValueError)):
+            # NOTE: Memory writer
+            # within the rust binding, though in this case
+            # since where using the wrapped object is
+            # is a check that just checks if the file is
+            # closed. i.e None
             f.write(b"hello world")
+
+
+def test_read_write_context_check_info():
+    original = b"Idempotency test data" * 10000
+    with tempfile.NamedTemporaryFile() as tmp:
+        f = safelz4.open(tmp.name, "wb")
+        f.write(original)
+        expected = f.frame_info
+        f.close()
+        o = safelz4.open(tmp.name, "rb")
+        assert o.frame_info == expected
+        assert o.current_block == 0
+        assert original == o.read(-1)
+        max_block = math.ceil(len(original) / o.block_size.get_size())
+        assert max_block == o.current_block
+        o.close()
 
 
 def test_roundtrip_idempotency():
