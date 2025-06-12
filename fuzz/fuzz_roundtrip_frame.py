@@ -20,7 +20,6 @@ def TestRoundTripFrame(data: bytes):
     # Extract seeds from the fuzzer data
     fdp = atheris.FuzzedDataProvider(data)
     data_size_seed = fdp.ConsumeInt(4)  # Use 4 bytes for seed
-    chunk_size_seed = fdp.ConsumeInt(4)  # Use 4 bytes for seed
 
     # Get remaining data as sample
     sample = fdp.ConsumeBytes(fdp.remaining_bytes())

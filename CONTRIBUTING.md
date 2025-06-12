@@ -12,13 +12,6 @@ Thank you for your interest in contributing to safelz4! This document provides g
 ## Development Setup
 
 ```bash
-git clone https://github.com/yourusername/safelz4.git
-cd safelz4
-python -m pip install -e .
-python -m pip install -r requirements-dev.txt
-```
-
-```bash
 git clone https://github.com/LVivona/safelz4.git
 cd safelz4
 pip install setuptools_rust
@@ -45,7 +38,7 @@ To check if your code falls under this style scope just run.
 make check
 ```
 
-You can also just apply them via:
+You can also just apply them via **NOTE**: it may lint everything, so always check.:
 ```bash
 # run lint format on python/rust
 make lint
@@ -53,22 +46,33 @@ make lint
 
 ### Documentation
 - All public/private functions must have docstrings
+- It's optional to add Raised objects.
 
 Example:
 ```python
-def decompress_prepend_size_with_dict(input: bytes, ext_dict: bytes) -> bytes:
-    """
-    Decompress input bytes using a user-provided dictionary of bytes, size is already pre-appended.
-    Args:
-        input (`bytes`):
-            fixed set of bytes to be decompressed.
-        ext_dict (`bytes`):
-            Dictionary used for decompression.
+    def readline(self, limit: int = -1) -> bytes:
+        """
+        Read and return one line from the stream.
 
-    Returns:
-        (`bytes`): decompressed data.
-    """
-    ...
+        Args:
+            limit (`int`, **optional**, default: -1):
+                Maximum number of bytes to read.
+                If -1, read until newline or EOF.
+
+        Returns:
+            (`bytes`): A single line including the trailing newline character,
+                or empty bytes if EOF is reached.
+
+        Raises:
+            (`ValueError`):
+                Rasied if the file is closed
+            (`ReadError`):
+                Raised when there is an issue reading the block.
+            (`DecompressionError`):
+                Raised decompression method is not supported or when
+                the data cannot be decoded properly.
+        """
+        ...
 ```
 
 ### Testing
@@ -116,7 +120,6 @@ Fixes #123
 All submissions require review. We use GitHub pull requests for this purpose. Reviewers will check for:
 
 - Code quality and style
-- Test coverage
 - Documentation completeness
 - Performance implications
 - Security considerations

@@ -1,4 +1,5 @@
 import os
+import math
 import pytest
 import safelz4
 from safelz4 import (
@@ -11,6 +12,7 @@ from safelz4 import (
     decompress_file,
 )
 from safelz4.frame import compress_with_info
+from typing import IO
 import tempfile
 
 # Error handling and edge cases
@@ -224,7 +226,6 @@ def test_concurrent_compression():
     assert all(results), "Not all concurrent operations succeeded"
 
 
-# Input validation
 def test_frame_info_invalid_parameters():
     """Test FrameInfo with invalid parameters"""
     # This depends on your implementation - adjust as needed
@@ -273,6 +274,74 @@ def test_file_permission_errors():
         finally:
             # Restore permissions for cleanup
             os.chmod(tmp.name, 0o644)
+
+
+def test_closed_exeption_throw():
+
+    with tempfile.NamedTemporaryFile() as tmp:
+        f = safelz4.open(tmp.name, "wb")
+        f.write(b"test")
+        assert f.closed == False
+        f.close()
+        assert f.closed == True
+        with pytest.raises((ValueError)):
+            # NOTE: Memory writer
+            # within the rust binding, though in this case
+            # since where using the wrapped object is
+            # is a check that just checks if the file is
+            # closed. i.e None
+            f.write(b"hello world")
+
+
+def test_read_write_context_check_info():
+    """Test properties/functions of wrapper Encoder/Decoder"""
+    original = b"Idempotency test data" * 10000
+    with tempfile.NamedTemporaryFile() as tmp:
+        f = safelz4.open(tmp.name, "wb")
+        # NOTE: Since We don't declare a block size default to AUTO.
+        #       though this should change when we write to the object
+        block_size = f.frame_info.block_size
+        assert block_size == BlockSize.Auto
+        written = f.write(original)
+        # NOTE: The Auto block size should of changed.
+        assert f.frame_info.block_size != BlockSize.Auto
+        assert written <= len(original)
+        expected = f.frame_info
+        f.close()
+
+        # Read Compressed Bytes
+        o = safelz4.open(tmp.name, "rb")
+        # Info
+        assert o.frame_info == expected
+        assert o.current_block == 0
+        # NOTE: 210_000 bytes < 256_000 bytes
+        assert o.block_size == BlockSize.Max256KB
+        assert o.block_checksum == False
+        assert o.content_size == None
+        assert o.mode == "rb"
+        assert o.name == tmp.name
+
+        # IO generic call check
+        assert o.readable() == True  # not closed so should be readable
+        assert o.writable() == False  # should be false always
+        assert original == o.read(-1)  # read all bytes
+        assert o.read(-1) == b""  # empty bytes
+        max_block = math.ceil(len(original) / o.block_size.get_size())
+        assert max_block == o.current_block
+        o.close()
+
+
+def test_instance_IO_typeing():
+    """Test that safelz4 is an instance of it's inhertance class IO"""
+    original = b"Idempotency test data" * 10000
+    with tempfile.NamedTemporaryFile() as tmp:
+        f = safelz4.open(tmp.name, "wb")
+        f.write(original)
+        assert isinstance(f, IO)
+        f.close()
+        o = safelz4.open(tmp.name, "rb")
+        assert isinstance(o, IO)
+        o.close()
 
 
 def test_roundtrip_idempotency():
