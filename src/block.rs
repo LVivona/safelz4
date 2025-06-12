@@ -65,8 +65,8 @@ fn compress_prepend_size<'py>(py: Python<'py>, input: &[u8]) -> PyResult<PyBound
 #[pyfunction]
 #[pyo3(signature = (input, output))]
 fn compress_into(input: &[u8], output: PyBound<'_, PyByteArray>) -> PyResult<usize> {
-    // NOTE: for possible safer practice it might be better 
-    //       to alloc mut vec, and return tha
+    //NOTE: for possible safer practice it might be better
+    //       to alloc mut vec, and return than using Pybound<'_, PyByteArray>.
     let buffer = unsafe { output.as_bytes_mut() };
     let size = lz4_flex::compress_into(input, buffer)
         .map_err(|e| LZ4BlockError::new_err(format!("{e}")))?;
