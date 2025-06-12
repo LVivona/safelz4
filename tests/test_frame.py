@@ -304,7 +304,7 @@ def test_read_write_context_check_info():
         assert block_size == BlockSize.Auto
         written = f.write(original)
         # NOTE: The Auto block size should of changed.
-        assert block_size != BlockSize.Auto
+        assert f.frame_info.block_size != BlockSize.Auto
         assert written <= len(original)
         expected = f.frame_info
         f.close()
