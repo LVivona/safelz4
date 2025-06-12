@@ -1,6 +1,7 @@
 import os
 import io
 from typing import Union, Optional, Literal, IO, List
+from types import TracebackType
 from safelz4.error import LZ4Exception
 from safelz4._safelz4_rs import _frame
 
@@ -110,7 +111,7 @@ class WrappedDecoderReader(IO[bytes]):
         filename: Union[os.PathLike, str],
         mode: Optional[Literal["rb", "rb|lz4"]] = None,
     ) -> None:
-        self._inner = _frame.FrameDecoderReader(filename, mode)
+        self._inner = _frame.FrameDecoderReader(filename=filename, mode=mode)
 
     @property
     def mode(self) -> str:
@@ -203,10 +204,20 @@ class WrappedDecoderReader(IO[bytes]):
 
         Returns:
             (`bytes`): block read from the stream return sized bytes of said
-                       block
+                       block.
 
         Raises:
-            (`ValueError`): If the file is closed
+            (`ValueError`):
+                Rasied if the file is closed
+            (`ReadError`):
+                Raised if the input stream cannot be read or is incomplete.
+            (`DecompressionError`):
+                Raised if the source buffer cannot be decompressed
+                into the destination buffer, typically due to corrupt or
+                malformed input.
+            (`LZ4Exception`):
+                Raised if a block checksum does not match the expected value,
+                indicating potential data corruption.
         """
         if self.closed:
             raise ValueError("I/O operation on closed file")
@@ -217,16 +228,22 @@ class WrappedDecoderReader(IO[bytes]):
         Read and return one line from the stream.
 
         Args:
-            limit (int, **optional**, default: -1):
+            limit (`int`, **optional**, default: -1):
                 Maximum number of bytes to read.
                 If -1, read until newline or EOF.
 
         Returns:
-            bytes: A single line including the trailing newline character,
+            (`bytes`): A single line including the trailing newline character,
                 or empty bytes if EOF is reached.
 
         Raises:
-            ValueError: If the file is closed
+            (`ValueError`):
+                Rasied if the file is closed
+            (`ReadError`):
+                Raised when there is an issue reading the block.
+            (`DecompressionError`):
+                Raised decompression method is not supported or when
+                the data cannot be decoded properly.
         """
         if self.closed:
             raise ValueError("I/O operation on closed file")
@@ -262,7 +279,8 @@ class WrappedDecoderReader(IO[bytes]):
             (`List[bytes]`): List of lines, each including trailing newline.
 
         Raises:
-            (`ValueError`): If the file is closed
+            (`ValueError`):
+                Raised if the file is closed
         """
         if self.closed:
             raise ValueError("I/O operation on closed file")
@@ -290,17 +308,17 @@ class WrappedDecoderReader(IO[bytes]):
             self._inner.close()
 
     def __enter__(self) -> Self:
-        """
-        Context manager entry — returns self.
-
-        Returns:
-            (`WrappedDecoderReader`): The reader wrapper instance itself.
-        """
+        """Context manager entry"""
         return self
 
-    def __exit__(self, type, value, traceback) -> None:
-        """Context manager exit — flushes and closes the writer."""
-        self._inner.__exit__(type, value, traceback)
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
+        """Context manager exit"""
+        self._inner.__exit__(exc_type, exc_value, traceback)
 
     def __str__(self):
         return f"<frame.EncoderReader name={self._name}>"
@@ -329,17 +347,16 @@ class WrappedEncoderWriter(IO[bytes]):
         legacy_frame: Optional[bool] = None,
     ) -> None:
         self._inner = _frame.FrameEncoderWriter(
-            filename,
-            mode,
-            block_size,
-            block_mode,
-            block_checksums,
-            dict_id,
-            content_checksum,
-            content_size,
-            legacy_frame,
+            filename=filename,
+            mode=mode,
+            block_size=block_size,
+            block_mode=block_mode,
+            block_checksums=block_checksums,
+            dict_id=dict_id,
+            content_checksum=content_checksum,
+            content_size=content_size,
+            legacy_frame=legacy_frame,
         )
-        self._name = filename
 
     @property
     def mode(self) -> str:
@@ -367,7 +384,7 @@ class WrappedEncoderWriter(IO[bytes]):
 
     def writable(self) -> bool:
         """Returns True since this is a writable stream."""
-        return not self._inner.closed
+        return not self.closed
 
     def seekable(self) -> bool:
         """
@@ -378,7 +395,7 @@ class WrappedEncoderWriter(IO[bytes]):
 
     def tell(self) -> int:
         """Returns current position in the stream."""
-        return self._inner.offset()
+        return self.offset
 
     def write(self, data: bytes) -> int:
         """
@@ -393,6 +410,11 @@ class WrappedEncoderWriter(IO[bytes]):
         Raises:
             (`ValueError`): If the file is closed.
             (`TypeError`): If data is not a bytes-like object.
+            (`LZ4Exception`):
+                within FrameEncoderWriter rasied when the file is closed.
+            (`CompressionError`):
+                raised when a compression method is not supported or when
+                the data cannot be encoded properly.
         """
         if self.closed:
             raise ValueError("I/O operation on closed file")
@@ -412,7 +434,15 @@ class WrappedEncoderWriter(IO[bytes]):
             lines (`List[bytes]`): Iterable of bytes-like objects.
 
         Raises:
-            (`ValueError`): If the file is closed.
+            (`ValueError`):
+                Raised when file is closed.
+            (`TypeError`):
+                Rasied if data is not a bytes-like object.
+            (`LZ4Exception`):
+                Rasied if within FrameEncoderWriter, when the file is closed.
+            (`CompressionError`):
+                Raised when a compression method is not supported or when
+                the data cannot be encoded properly.
         """
         if self.closed:
             raise ValueError("I/O operation on closed file")
@@ -425,7 +455,10 @@ class WrappedEncoderWriter(IO[bytes]):
         Flush the internal buffer to disk.
 
         Raises:
-            (`ValueError`): If the file is closed.
+            (`LZ4Exception`):
+                Rasied when the file is closed.
+            (`IOError`):
+                Raised when the file is unable to flush.
         """
         if self.closed:
             raise ValueError("I/O operation on closed file")
@@ -436,25 +469,24 @@ class WrappedEncoderWriter(IO[bytes]):
         Close the stream and flush any remaining data.
 
         Raises:
-            (`IOError`): If flushing fails during close.
+            (`IOError`):
+                Raised when the file is unable to flush.
         """
         if not self.closed:
             self._inner.close()
 
     def __enter__(self) -> Self:
-        """
-        Context manager entry.
-
-        Returns:
-            (`WrappedEncoderWriter`): The writer wrapper instance itself.
-        """
+        """Context manager entry."""
         return self
 
-    def __exit__(self, type, value, traceback) -> None:
-        """
-        Context manager exit.
-        """
-        self._inner.__exit__(type, value, traceback)
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
+        """Context manager exit."""
+        self._inner.__exit__(exc_type, exc_value, traceback)
 
     def __str__(self):
         return f"<frame.WrappedDecoderReader name={self.name}>"
@@ -492,7 +524,7 @@ def open(
                 yield content
 
     # Writing LZ4 compressed data
-    with safelz4.lz4_open("datafile.lz4", "wb") as file:
+    with safelz4.open("datafile.lz4", "wb") as file:
         for content in chunk("datafile.txt", MEGABYTE):
             file.write(content)
     ```
@@ -504,7 +536,7 @@ def open(
 
     # Reading LZ4 compressed data
     chunk_size = 1024
-    with safelz4.lz4_open("datafile.lz4", "rb") as file:
+    with safelz4.open("datafile.lz4", "rb") as file:
         while content := file.read(chunk_size):
             print(content)
     ```
@@ -516,7 +548,7 @@ def open(
 
     # Reading without context manager
     chunk_size = 1024
-    file = safelz4.lz4_open("datafile.lz4", "rb")
+    file = safelz4.open("datafile.lz4", "rb")
     try:
         while content := file.read(chunk_size):
             print(content)

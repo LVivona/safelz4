@@ -1221,6 +1221,14 @@ impl PyFrameDecoderReader {
         //       the mmap has allocated.
         self.close();
     }
+
+    fn __repr__(&self) -> String {
+        format!("<_frame.FrameDecoderReader name={:?}>", self.name,)
+    }
+
+    fn __str__(&self) -> String {
+        format!("<_frame.FrameDecoderReader name={:?}>", self.name,)
+    }
 }
 
 #[inline]
@@ -1367,6 +1375,14 @@ impl PyFrameEncoderWriter {
         _traceback: PyObject,
     ) -> PyResult<()> {
         self.close()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("<_frame.FrameEncoderWriter name={:?}>", self.name,)
+    }
+
+    fn __str__(&self) -> String {
+        format!("<_frame.FrameEncoderWriter name={:?}>", self.name,)
     }
 }
 /// Check if a file is a valid LZ4 Frame file by reading its header

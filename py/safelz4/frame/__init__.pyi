@@ -1,6 +1,7 @@
 import os
 import io
-from typing import Optional, Union, Any, Literal, Final, List, IO, overload
+from typing import Optional, Union, Literal, Final, List, IO, overload
+from types import TracebackType
 
 try:
     from typing import Self
@@ -46,7 +47,8 @@ class BlockMode(Enum):
 
 class BlockSize(IntEnum):
     """
-    Block size for frame compression.
+    Size of individual compressed or uncompressed data
+    blocks within the frame.
 
     Attributes:
         Auto: Will detect optimal frame size based on the size of the first
@@ -346,11 +348,12 @@ class FrameDecoderReader:
             Path to the LZ4 frame file.
 
     Raises:
-        (`IOError`): If the file cannot be opened or memory-mapped.
-        (`ReadError`): If reading invalid memeory in the mmap.
-        (`HeaderError`): If reading file header fails.
-        (`DecompressionError`): If decompressing
-
+        (`IOError`):
+            Rasied if the file cannot be opened or memory-mapped.
+        (`ReadError`):
+            Raised if reading invalid memeory in the mmap.
+        (`HeaderError`):
+            Rasied if reading file header fails.
     """
 
     def __new__(self, filename: Union[os.PathLike, str]) -> Self: ...
@@ -428,6 +431,8 @@ class FrameDecoderReader:
             (`bytes`): A decompressed byte string of the requested size.
 
         Raises:
+            (`ValueError`):
+                Rasied if the file is closed
             (`ReadError`):
                 Raised if the input stream cannot be read or is incomplete.
             (`DecompressionError`):
@@ -452,7 +457,7 @@ class FrameDecoderReader:
         self,
         exc_type: Optional[type[BaseException]],
         exc_value: Optional[BaseException],
-        traceback: Optional[Any],
+        traceback: Optional[TracebackType],
     ) -> None:
         """
         Context manager exit
@@ -470,8 +475,11 @@ class FrameEncoderWriter:
             Frame parameters; uses defaults if None.
 
     Raises:
-        (`IOError`): If the file cannot be opened for writing.
-        (`CompressionError`): If writing something happens when into enocder.
+        (`LZ4Exception`):
+            Rasied when the file is closed.
+        (`CompressionError`):
+            Raised when a compression method is not supported or when
+            the data cannot be encoded properly.
     """
 
     def __new__(
@@ -548,7 +556,7 @@ class FrameEncoderWriter:
         self,
         exc_type: Optional[type[BaseException]],
         exc_value: Optional[BaseException],
-        traceback: Optional[Any],
+        traceback: Optional[TracebackType],
     ) -> None:
         """
         Context manager exit — flushes and closes the writer.
@@ -602,14 +610,26 @@ class WrappedDecoderReader(IO[bytes]):
         Read and return up to size bytes.
 
         Args:
-            size: Number of bytes to read. If -1 or None,
+            size (`int`, **optional**, default to -1):
+                Number of bytes to read. If -1 or None,
                 read all remaining data.
 
         Returns:
-            block read from the stream return sized bytes of said block
+            (`bytes`): block read from the stream return sized bytes of said
+                       block.
 
         Raises:
-            ValueError: If the file is closed
+            (`ValueError`):
+                Rasied if the file is closed
+            (`ReadError`):
+                Raised if the input stream cannot be read or is incomplete.
+            (`DecompressionError`):
+                Raised if the source buffer cannot be decompressed
+                into the destination buffer, typically due to corrupt or
+                malformed input.
+            (`LZ4Exception`):
+                Raised if a block checksum does not match the expected value,
+                indicating potential data corruption.
         """
         ...
     def readline(self, limit: int = -1) -> bytes:
@@ -617,16 +637,22 @@ class WrappedDecoderReader(IO[bytes]):
         Read and return one line from the stream.
 
         Args:
-            limit (int, **optional**, default: -1):
+            limit (`int`, **optional**, default: -1):
                 Maximum number of bytes to read.
                 If -1, read until newline or EOF.
 
         Returns:
-            bytes: A single line including the trailing newline character,
+            (`bytes`): A single line including the trailing newline character,
                 or empty bytes if EOF is reached.
 
         Raises:
-            ValueError: If the file is closed
+            (`ValueError`):
+                Rasied if the file is closed
+            (`ReadError`):
+                Raised when there is an issue reading the block.
+            (`DecompressionError`):
+                Raised decompression method is not supported or when
+                the data cannot be decoded properly.
         """
         ...
     def readlines(self, hint: int = -1) -> List[bytes]:
@@ -634,15 +660,28 @@ class WrappedDecoderReader(IO[bytes]):
         Read and return a list of lines from the stream.
 
         Args:
-            hint (int, optional): Approximate number of bytes to read.
-                                If -1, read all lines.
+            hint (`int`, **optional**, default: -1):
+                Approximate number of bytes to read.
+                If -1, read all lines.
 
         Returns:
-            List[bytes]: List of lines, each including trailing newline.
+            (`List[bytes]`): List of lines, each including trailing newline.
 
         Raises:
-            ValueError: If the file is closed.
+            (`ValueError`):
+                Raised if the file is closed
         """
+        ...
+    def __enter__(self) -> Self:
+        """Context manager entry"""
+        ...
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
+        """Context manager exit"""
         ...
     def __str__(self): ...
     def __repr__(self): ...
@@ -734,13 +773,17 @@ class WrappedEncoderWriter(IO[bytes]):
             (`IOError`): If flushing fails during close.
         """
         ...
-    def __enter__(self) -> Self: ...
+    def __enter__(self) -> Self:
+        """Context manager entry."""
+        ...
     def __exit__(
         self,
         exc_type: Optional[type[BaseException]],
         exc_value: Optional[BaseException],
-        traceback: Optional[Any],
-    ) -> None: ...
+        traceback: Optional[TracebackType],
+    ) -> None:
+        """Context manager exit."""
+        ...
     def __str__(self): ...
     def __repr__(self): ...
 
