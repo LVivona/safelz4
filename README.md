@@ -119,54 +119,54 @@ Benchmark results are available in the `benches` folder. We evaluated performanc
 
 ### Streamed access ``(chunk 1024 bytes)``
 
-| `open` Benchmark                                | safelz4 | lz4             |
+| `open` Write Benchmark                          | lz4           |  safelz4              |
 |-------------------------------------------------|---------------|-----------------------|
-| ctx_compression_writer_compression_1k.txt       | 8.84 us       | 22.5 us: 2.54x slower |
-| ctx_compression_writer_compression_34k.txt      | 9.07 us       | 22.6 us: 2.49x slower |
-| ctx_compression_writer_compression_65k.txt      | 9.18 us       | 23.0 us: 2.50x slower |
-| ctx_compression_writer_compression_66k_JSON.txt | 9.18 us       | 23.1 us: 2.51x slower |
-| ctx_compression_writer_dickens.txt              | 9.16 us       | 23.9 us: 2.61x slower |
-| ctx_compression_writer_hdfs.json                | 9.21 us       | 22.9 us: 2.49x slower |
-| ctx_compression_writer_reymont.pdf              | 9.26 us       | 22.9 us: 2.48x slower |
-| ctx_compression_writer_xml_collection.xml       | 9.27 us       | 23.1 us: 2.49x slower |
-| **Geometric mean**                              | **(ref)**     | **2.51x slower**      |
+| ctx_compression_writer_compression_1k.txt       | 22.5 us       | 8.84 us: 2.54x faster |
+| ctx_compression_writer_compression_34k.txt      | 22.6 us   | 9.07 us: 2.49x faster |
+| ctx_compression_writer_compression_65k.txt      | 23.0 us   | 9.18 us: 2.50x faster  |
+| ctx_compression_writer_compression_66k_JSON.txt | 23.1 us   | 9.18 us: 2.51x faster |
+| ctx_compression_writer_dickens.txt              |  23.9 us   | 9.16 us: 2.61x faster  |
+| ctx_compression_writer_hdfs.json                | 22.9 us   | 9.21 us: 2.49x faster |
+| ctx_compression_writer_reymont.pdf              | 22.9 us   | 9.26 us: 2.48x faster |
+| ctx_compression_writer_xml_collection.xml       | 23.1 us   | 9.27 us: 2.49x faster |
+| **Geometric mean**                              | **(ref)**     | **2.51x faster**      |
 
-| `open` Benchmark                                       | safelz4 | lz4            |
-|-------------------------------------------------|----------------|-----------------------|
-| ctx_decompression_writer_compression_1k.txt       | 11.0 us        | 17.6 us: 1.59x slower |
-| ctx_decompression_writer_compression_34k.txt      | 23.8 us        | 46.2 us: 1.94x slower |
-| ctx_decompression_writer_compression_65k.txt      | 34.6 us        | 68.6 us: 1.98x slower |
-| ctx_decompression_writer_compression_66k_JSON.txt | 27.1 us        | 61.9 us: 2.28x slower |
-| ctx_decompression_writer_dickens.txt              | 4.11 ms        | 8.67 ms: 2.11x slower |
-| ctx_decompression_writer_hdfs.json                | 1.77 ms        | 4.39 ms: 2.48x slower |
-| ctx_decompression_writer_reymont.pdf              | 2.92 ms        | 5.74 ms: 1.97x slower |
-| ctx_decompression_writer_xml_collection.xml       | 1.99 ms        | 3.97 ms: 2.00x slower |
-| **Geometric mean**                              | **(ref)**      | **2.03x slower**      |
+| `open` Read Benchmark                             |  lz4           |  safelz4              |
+|---------------------------------------------------|----------------|-----------------------|
+| ctx_decompression_writer_compression_1k.txt       | 17.6 us    | 11.0 us: 1.59x faster |
+| ctx_decompression_writer_compression_34k.txt      | 46.2 us    | 23.8 us: 1.94x faster |
+| ctx_decompression_writer_compression_65k.txt      | 68.6 us    | 34.6 us: 1.98x faster |
+| ctx_decompression_writer_compression_66k_JSON.txt | 61.9 us    | 27.1 us: 2.28x faster |
+| ctx_decompression_writer_dickens.txt              | 8.67 ms    | 4.11 ms: 2.11x faster  |
+| ctx_decompression_writer_hdfs.json                | 4.39 ms    | 1.77 ms: 2.48x faster |
+| ctx_decompression_writer_reymont.pdf              | 5.74 ms    | 2.92 ms: 1.97x faster |
+| ctx_decompression_writer_xml_collection.xml       | 3.97 ms    | 1.99 ms: 2.00x faster  |
+| **Geometric mean**                                | **(ref)**      | **2.03x faster**      |
 
 ### Full byte availability Run(s) 
-| `frame.compress` Benchmark                           | safelz4 | lz4                 |
-|-------------------------------------|-----------|----------------------|
-| compression_compression_1k.txt       | 829 ns    | 839 ns: 1.01x slower |
-| compression_compression_34k.txt      | 26.3 us   | 32.5 us: 1.23x slower |
-| compression_compression_65k.txt      | 49.9 us   | 60.1 us: 1.20x slower |
-| compression_compression_66k_JSON.txt | 26.5 us   | 24.7 us: 1.07x faster |
-| compression_dickens.txt              | 17.0 ms   | 15.9 ms: 1.07x faster |
-| compression_hdfs.json                | 3.16 ms   | 2.63 ms: 1.20x faster |
-| compression_reymont.pdf              | 12.3 ms   | 11.4 ms: 1.08x faster |
-| compression_xml_collection.xml       | 4.58 ms   | 4.12 ms: 1.11x faster |
-| **Geometric mean**                  | **(ref)** | **1.01x faster**      |
+| `frame.compress` Benchmark           | lz4       | safelz4              |
+|--------------------------------------|-----------|----------------------|
+| compression_compression_1k.txt       | 839 ns  | 829 ns: 1.01x faster   |
+| compression_compression_34k.txt      | 32.5 us | 26.3 us: 1.23x faster  |
+| compression_compression_65k.txt      | 60.1 us | 49.9 us: 1.20x faster  |
+| compression_compression_66k_JSON.txt | 24.7 us | 26.5 us: 1.07x slower  |
+| compression_dickens.txt              | 15.9 ms | 17.0 ms: 1.07x slower  |
+| compression_hdfs.json                | 2.63 ms | 3.16 ms: 1.20x slower  |
+| compression_reymont.pdf              | 11.4 ms | 12.3 ms: 1.08x slower  |
+| compression_xml_collection.xml       | 4.12 ms | 4.58 ms: 1.11x slower  |
+| **Geometric mean**                   | **(ref)** | **1.01x slower**     |
 
-| `frame.decompress` Benchmark                           | safelz4 | lz4                |
+| `frame.decompress` Benchmark        |    lz4     |  safelz4  |
 |-------------------------------------|------------|----------------------|
-| decompress_compression_1k.txt       | 612 ns     | 416 ns: 1.47x faster |
-| decompress_compression_34k.txt      | 8.96 us    | 10.0 us: 1.12x slower |
-| decompress_compression_65k.txt      | 15.4 us    | 17.1 us: 1.11x slower |
-| decompress_compression_66k_JSON.txt | 9.45 us    | 8.04 us: 1.18x faster |
-| decompress_dickens.txt              | 4.00 ms    | 2.13 ms: 1.88x faster |
-| decompress_hdfs.json                | 1.50 ms    | 1.03 ms: 1.45x faster |
-| decompress_reymont.pdf              | 2.42 ms    | 1.99 ms: 1.21x faster |
-| decompress_xml_collection.xml       | 1.68 ms    | 1.19 ms: 1.41x faster |
-| **Geometric mean**                  | **(ref)**  | **1.26x faster**      |
+| decompress_compression_1k.txt       | 416 ns  | 612 ns: 1.47x slower |
+| decompress_compression_34k.txt      | 10.0 us | 8.96 us: 1.12x faster |
+| decompress_compression_65k.txt      | 17.1 us | 15.4 us: 1.11x faster |
+| decompress_compression_66k_JSON.txt | 8.04 us | 9.45 us: 1.18x slower |
+| decompress_dickens.txt              | 2.13 ms | 4.00 ms: 1.88x slower |
+| decompress_hdfs.json                | 1.03 ms | 1.50 ms: 1.45x slower |
+| decompress_reymont.pdf              | 1.99 ms | 2.42 ms: 1.21x slower |
+| decompress_xml_collection.xml       | 1.19 ms | 1.68 ms: 1.41x slower |
+| **Geometric mean**                  | **(ref)**  |  **1.26x slower**  |
 
 
 **NOTE**: All benchmarks were performed using python package `pypref`, on a system equipped with an Apple M4 Max processor and 36GB of unified memory.
