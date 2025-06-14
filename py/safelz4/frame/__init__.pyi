@@ -444,7 +444,9 @@ class FrameDecoderReader:
                 indicating potential data corruption.
         """
         ...
-    def close(self) -> None: ...
+    def close(self) -> None:
+        """close file"""
+        ...
     def __enter__(self) -> Self:
         """
         Context manager entry.
@@ -463,6 +465,8 @@ class FrameDecoderReader:
         Context manager exit
         """
         ...
+    def __str__(self) -> str: ...
+    def __repr__(self) -> str: ...
 
 class FrameEncoderWriter:
     """
