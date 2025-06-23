@@ -321,10 +321,10 @@ class WrappedDecoderReader(IO[bytes]):
         self._inner.__exit__(exc_type, exc_value, traceback)
 
     def __str__(self):
-        return f"<frame.EncoderReader name={self._name}>"
+        return f"<frame.EncoderReader name={self.name}>"
 
     def __repr__(self):
-        return f"<frame.EncoderReader name={self._name}>"
+        return f"<frame.EncoderReader name={self.name}>"
 
 
 class WrappedEncoderWriter(IO[bytes]):
