@@ -808,6 +808,7 @@ class WrappedEncoderWriter(IO[bytes]):
 def open(
     filename: Union[str, os.PathLike],
     mode: Optional[Literal["wb", "wb|lz4"]] = None,
+    *,
     block_size: BlockSize = BlockSize.Auto,
     block_mode: BlockMode = BlockMode.Independent,
     block_checksums: Optional[bool] = None,
@@ -820,5 +821,6 @@ def open(
 def open(
     filename: Union[str, os.PathLike],
     mode: Optional[Literal["rb", "rb|lz4"]] = None,
+    *,
     chunk_size: Optional[int] = None,
 ) -> WrappedDecoderReader: ...

@@ -312,7 +312,7 @@ class WrappedDecoderReader(IO[bytes]):
 
     def __iter__(self) -> Iterator[bytes]:
         """iter through the frame blocks."""
-        return iter(self._inner)
+        return self._inner.__iter__()
 
     def __enter__(self) -> Self:
         """Context manager entry"""
@@ -328,10 +328,10 @@ class WrappedDecoderReader(IO[bytes]):
         self._inner.__exit__(exc_type, exc_value, traceback)
 
     def __str__(self):
-        return f"<frame.EncoderReader name={self._name}>"
+        return f"<frame.EncoderReader name={self.name}>"
 
     def __repr__(self):
-        return f"<frame.EncoderReader name={self._name}>"
+        return f"<frame.EncoderReader name={self.name}>"
 
 
 class WrappedEncoderWriter(IO[bytes]):
@@ -505,6 +505,7 @@ class WrappedEncoderWriter(IO[bytes]):
 def open(
     filename: Union[str, os.PathLike],
     mode: Optional[Literal["rb", "rb|lz4", "wb", "wb|lz4"]] = None,
+    *,
     block_size: _frame.BlockSize = BlockSize.Auto,
     block_mode: _frame.BlockMode = BlockMode.Independent,
     block_checksums: Optional[bool] = None,
@@ -562,6 +563,21 @@ def open(
             print(content)
     finally:
         file.close()
+    ```
+
+    OR
+
+    ```python
+    import safelz4
+
+    chunk_size = 1024
+    buffer = safelz4.open("datafile.lz4", "rb", chunk_size=chunk_size)
+
+    try:
+        for buf in buffer:
+            print(buf)
+    finally:
+        buffer.close()
     ```
     """
     if mode is None:
