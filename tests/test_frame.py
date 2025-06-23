@@ -356,3 +356,77 @@ def test_roundtrip_idempotency():
     assert compressed1 == compressed2
     # Note: compressed1 and compressed2 might not be identical due to
     # different compression parameters or randomness, but that's okay
+
+
+def test_frame_iter_pattern():
+    original = b"Idempotency test data" * 10000
+    with tempfile.NamedTemporaryFile() as tmp:
+        f = safelz4.open(tmp.name, "wb")
+        f.write(original)
+        assert isinstance(f, IO)
+        f.close()
+        with safelz4.open(tmp.name, "rb", chunk_size=10) as o:
+            block_iter = iter(o)
+            assert original[:10] == next(block_iter)
+
+
+def test_frame_iter_chunk_sizes():
+    """Test iteration with different chunk sizes."""
+    original = b"Test data for chunk size validation." * 1000
+
+    chunk_sizes = [1, 10, 64, 512, 1024, 4096]
+
+    with tempfile.NamedTemporaryFile() as tmp:
+        with safelz4.open(tmp.name, "wb") as f:
+            f.write(original)
+
+        for chunk_size in chunk_sizes:
+            with safelz4.open(tmp.name, "rb", chunk_size=chunk_size) as reader:
+                chunks = list(reader)
+                reconstructed = b"".join(chunks)
+
+                # Verify data integrity
+                assert reconstructed == original
+
+                for chunk in chunks[:-1]:  # All but last chunk
+                    assert len(chunk) == chunk_size
+
+                if chunks:
+                    assert len(chunks[-1]) <= chunk_size
+
+
+def test_frame_iter_empty_file():
+    """Test iteration over empty compressed file."""
+    with tempfile.NamedTemporaryFile() as tmp:
+        # Create empty compressed file
+        with open(tmp.name, "wb") as f:
+            output = compress(b"")
+            f.write(output)
+            f.flush()
+
+        with safelz4.open(tmp.name, "rb", chunk_size=10) as reader:
+            chunks = list(reader)
+            assert chunks == [] or chunks == [b""]
+
+
+def test_frame_iter_idempotency():
+    """Test that iteration is idempotent - same results each time."""
+    original = b"Idempotency test data" * 10000
+
+    with tempfile.NamedTemporaryFile() as tmp:
+        with safelz4.open(tmp.name, "wb") as f:
+            f.write(original)
+            assert isinstance(f, IO)
+
+        # Test multiple iterations produce same results
+        results = []
+        for _ in range(3):
+            with safelz4.open(tmp.name, "rb", chunk_size=10) as reader:
+                chunks = list(reader)
+                results.append(chunks)
+
+        # All iterations should produce identical results
+        assert all(result == results[0] for result in results)
+
+        # Verify first chunk matches expected
+        assert results[0][0] == original[:10]
