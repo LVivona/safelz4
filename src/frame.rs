@@ -749,6 +749,8 @@ struct PyFrameDecoderReader {
     name: PathBuf,
     /// mode (read bytes un/compressed)
     mode: LZ4FileMode,
+    /// max block chunks within iter
+    chunk_size: Option<usize>,
     /// file header
     frame_info: PyFrameInfo,
     /// from file header the offset of the blocks
@@ -1007,8 +1009,8 @@ impl PyFrameDecoderReader {
 #[pymethods]
 impl PyFrameDecoderReader {
     #[new]
-    #[pyo3(signature = (filename, mode = None))]
-    pub fn new(filename: PathBuf, mode: Option<&str>) -> PyResult<Self> {
+    #[pyo3(signature = (filename, mode = None, chunk_size = None))]
+    pub fn new(filename: PathBuf, mode: Option<&str>, chunk_size: Option<usize>) -> PyResult<Self> {
         let mode: LZ4FileMode = match mode {
             Some(value) => value.try_into()?,
             None => LZ4FileMode::READ_BYTES(String::from("rb")),
@@ -1060,6 +1062,7 @@ impl PyFrameDecoderReader {
             mode,
             frame_info,
             offset,
+            chunk_size,
             src,
             dst,
             current_block: 0,
@@ -1074,7 +1077,7 @@ impl PyFrameDecoderReader {
     }
 
     #[getter]
-    /// return the name of the file
+    /// Return the name of the file
     pub fn name(&self) -> PyResult<PathBuf> {
         Ok(self.name.clone())
     }
@@ -1085,7 +1088,7 @@ impl PyFrameDecoderReader {
         Ok(self.mode.clone().into())
     }
 
-    /// check if the inner is closed.
+    /// Return if file is open.
     #[getter]
     fn closed(&self) -> PyResult<bool> {
         match self.inner {
@@ -1203,12 +1206,34 @@ impl PyFrameDecoderReader {
         }
     }
 
-    /// drop the Arc<Mmap>
+    /// drop
     fn close(&mut self) {
         self.inner = None
     }
 
-    /// Context manager entry — returns self.
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__<'py>(
+        mut slf: PyRefMut<'py, Self>,
+        py: Python<'py>,
+    ) -> PyResult<Option<PyBound<'py, PyBytes>>> {
+        if slf.closed()? {
+            return Ok(None);
+        }
+
+        let chunk_size = slf.chunk_size.unwrap_or_else(|| {
+            // Handle potential errors in getting block size
+            match slf.block_size().and_then(|bs| bs.get_size()) {
+                Ok(size) => size,
+                Err(_) => 8026,
+            }
+        }) as isize;
+        slf.read(py, Some(chunk_size))
+    }
+
+    /// Context manager entry.
     /// Returns:
     ///     (`FrameDecoderReader`): The reader instance itself.
     pub fn __enter__(slf: Py<Self>) -> Py<Self> {
@@ -1364,6 +1389,9 @@ impl PyFrameEncoderWriter {
         Ok(())
     }
 
+    /// Context manager entry.
+    /// Returns:
+    ///     (`FrameEncoderWriter`): The writer instance itself.
     pub fn __enter__(slf: Py<Self>) -> Py<Self> {
         slf
     }

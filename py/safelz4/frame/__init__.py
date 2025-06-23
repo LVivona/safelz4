@@ -69,7 +69,7 @@ BLOCK_INFO_SIZE = _frame.BLOCK_INFO_SIZE
 
 
 def is_framefile(
-    name: Union[os.PathLike, str, bytes, io.BufferedReader]
+    name: Union[os.PathLike, str, bytes, io.BufferedReader],
 ) -> bool:
     """
     Return True if `name` is a valid LZ4 frame file or buffer, else False.
@@ -110,8 +110,11 @@ class WrappedDecoderReader(IO[bytes]):
         self,
         filename: Union[os.PathLike, str],
         mode: Optional[Literal["rb", "rb|lz4"]] = None,
+        chunk_size: Optional[int] = None,
     ) -> None:
-        self._inner = _frame.FrameDecoderReader(filename=filename, mode=mode)
+        self._inner = _frame.FrameDecoderReader(
+            filename=filename, mode=mode, chunk_size=chunk_size
+        )
 
     @property
     def mode(self) -> str:
@@ -306,6 +309,10 @@ class WrappedDecoderReader(IO[bytes]):
         """Close the stream."""
         if not self.closed:
             self._inner.close()
+
+    def __iter__(self):
+        """iter through the frame blocks."""
+        return self._inner.__iter__()
 
     def __enter__(self) -> Self:
         """Context manager entry"""
@@ -505,6 +512,7 @@ def open(
     content_checksum: Optional[bool] = None,
     content_size: Optional[int] = None,
     legacy_frame: Optional[bool] = None,
+    chunk_size: Optional[int] = None,
 ) -> IO[bytes]:
     """
     Returns a context manager for reading or writing lz4 frames.
@@ -560,18 +568,20 @@ def open(
         mode = "rb"
 
     if mode in ("rb", "rb|lz4"):
-        return WrappedDecoderReader(filename, mode)
+        return WrappedDecoderReader(
+            filename=filename, mode=mode, chunk_size=chunk_size
+        )
     elif mode in ("wb", "wb|lz4"):
         return WrappedEncoderWriter(
-            filename,
-            mode,
-            block_size,
-            block_mode,
-            block_checksums,
-            dict_id,
-            content_checksum,
-            content_size,
-            legacy_frame,
+            filename=filename,
+            mode=mode,
+            block_size=block_size,
+            block_mode=block_mode,
+            block_checksums=block_checksums,
+            dict_id=dict_id,
+            content_checksum=content_checksum,
+            content_size=content_size,
+            legacy_frame=legacy_frame,
         )
     else:
         raise ValueError(

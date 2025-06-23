@@ -344,8 +344,12 @@ class FrameDecoderReader:
     Read and parse an LZ4 frame file in memory using memory mapping.
 
     Args:
-        filename (`str` or `os.PathLike`):
+        filename (str or os.PathLike):
             Path to the LZ4 frame file.
+        mode (Literal["rb", "rb|lz4"], **optional**, default: None):
+            File mode used for reading. Must be either "rb" or "rb|lz4".
+        chunk_size (int, optional, default: None):
+            Size of each chunk (in bytes) to read when iterating over the file.
 
     Raises:
         (`IOError`):
@@ -356,7 +360,12 @@ class FrameDecoderReader:
             Rasied if reading file header fails.
     """
 
-    def __new__(self, filename: Union[os.PathLike, str]) -> Self: ...
+    def __new__(
+        self,
+        filename: Union[os.PathLike, str],
+        mode: Optional[Literal["rb", "rb|lz4"]] = None,
+        chunk_size: Optional[int] = None,
+    ) -> Self: ...
     @getattr
     def closed(self) -> bool: ...
     @getattr
@@ -447,6 +456,8 @@ class FrameDecoderReader:
     def close(self) -> None:
         """close file"""
         ...
+    def __iter__(self) -> Self: ...
+    def __next__(self) -> bytes: ...
     def __enter__(self) -> Self:
         """
         Context manager entry.
@@ -580,6 +591,7 @@ class WrappedDecoderReader(IO[bytes]):
         self,
         filename: Union[os.PathLike, str],
         mode: Optional[Literal["rb", "rb|lz4"]] = None,
+        chunk_size: Optional[int] = None,
     ) -> None: ...
     @property
     def mode(self) -> str: ...
@@ -676,6 +688,7 @@ class WrappedDecoderReader(IO[bytes]):
                 Raised if the file is closed
         """
         ...
+    def __iter__(self) -> FrameDecoderReader: ...
     def __enter__(self) -> Self:
         """Context manager entry"""
         ...
@@ -807,4 +820,5 @@ def open(
 def open(
     filename: Union[str, os.PathLike],
     mode: Optional[Literal["rb", "rb|lz4"]] = None,
+    chunk_size: Optional[int] = None,
 ) -> WrappedDecoderReader: ...
