@@ -1,6 +1,6 @@
 import os
 import io
-from typing import Union, Optional, Literal, IO, List
+from typing import Union, Optional, Literal, IO, List, Iterator
 from types import TracebackType
 from safelz4.error import LZ4Exception
 from safelz4._safelz4_rs import _frame
@@ -310,9 +310,9 @@ class WrappedDecoderReader(IO[bytes]):
         if not self.closed:
             self._inner.close()
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[bytes]:
         """iter through the frame blocks."""
-        return self._inner.__iter__()
+        return iter(self._inner)
 
     def __enter__(self) -> Self:
         """Context manager entry"""
