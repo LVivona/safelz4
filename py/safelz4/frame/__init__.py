@@ -69,7 +69,7 @@ BLOCK_INFO_SIZE = _frame.BLOCK_INFO_SIZE
 
 
 def is_framefile(
-    name: Union[os.PathLike, str, bytes, io.BufferedReader]
+    name: Union[os.PathLike, str, bytes, io.BufferedReader],
 ) -> bool:
     """
     Return True if `name` is a valid LZ4 frame file or buffer, else False.
@@ -561,18 +561,18 @@ def open(
         mode = "rb"
 
     if mode in ("rb", "rb|lz4"):
-        return WrappedDecoderReader(filename, mode)
+        return WrappedDecoderReader(filename=filename, mode=mode)
     elif mode in ("wb", "wb|lz4"):
         return WrappedEncoderWriter(
-            filename,
-            mode,
-            block_size,
-            block_mode,
-            block_checksums,
-            dict_id,
-            content_checksum,
-            content_size,
-            legacy_frame,
+            filename=filename,
+            mode=mode,
+            block_size=block_size,
+            block_mode=block_mode,
+            block_checksums=block_checksums,
+            dict_id=dict_id,
+            content_checksum=content_checksum,
+            content_size=content_size,
+            legacy_frame=legacy_frame,
         )
     else:
         raise ValueError(
