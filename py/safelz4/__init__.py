@@ -33,8 +33,11 @@ Example Usage:
     >>> original = safelz4.decompress(compressed)
     >>>
     >>> # File operations with automatic format detection
-    >>> safelz4.compress_into_file("large_dataset.json", "dataset.lz4")
-    >>> safelz4.decompress_file("dataset.lz4", "restored_dataset.json")
+    >>> with open("datafile.txt", "rb") as file:
+    ...     buffer = file.read(-1)
+    ...     safelz4.compress_into_file("datafile.lz4", buffer)
+    >>>
+    >>> output = safelz4.decompress_file("dataset.lz4")
     >>>
     >>> # Stream processing for large files
     >>> with safelz4.open("archive.lz4", "rb") as compressed_file:

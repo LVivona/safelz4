@@ -176,9 +176,9 @@ def decompress_file(filename: Union[os.PathLike, str]) -> bytes:
     Example:
 
     ```python
-    from safelz4 import decompress
+    from safelz4 import decompress_file
 
-    output = decompress("datafile.lz4")
+    output = decompress_file("datafile.lz4")
     ```
 
     """
@@ -223,11 +223,11 @@ def compress_into_file(filename: Union[os.PathLike, str], input: bytes) -> None:
 
     Example:
     ```python
-    from safelz4.frame import compress
+    import safelz4
 
     with open("datafile.txt", "rb") as file:
         buffer = file.read(-1)
-        compress_into_file("datafile.lz4", buf_f)
+        safelz4.compress_into_file("datafile.lz4", buffer)
 
     ```
     """
