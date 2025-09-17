@@ -69,6 +69,7 @@ __all__ = [
     "__version__",
     "block",
     "frame",
+    "error",
     "BlockMode",
     "BlockSize",
     "FrameInfo",
