@@ -10,6 +10,7 @@
     <!-- Uncomment when release to pypi -->
     <a href="https://pypi.org/project/safelz4/"><img alt="PyPI" src="https://img.shields.io/pypi/v/safelz4"></a>
     <a href="https://pypi.org/project/safelz4/"><img alt="Python Version" src="https://img.shields.io/pypi/pyversions/safelz4?logo=python"></a>
+    <a href="https://pepy.tech/projects/safelz4"><img src="https://static.pepy.tech/personalized-badge/safelz4?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="PyPI Downloads"></a>
 </p>
 
 Python bindings for [lz4_flex](https://github.com/PSeitz/lz4_flex), the fastest pure-Rust implementation of the LZ4 compression algorithm.
@@ -143,6 +144,7 @@ Benchmark results are available in the `benches` folder. We evaluated performanc
 | ctx_decompression_writer_xml_collection.xml       | 3.97 ms    | 1.99 ms: 2.00x faster  |
 | **Geometric mean**                                | **(ref)**      | **2.03x faster**      |
 
+
 ### Full byte availability Run(s) 
 | `frame.compress` Benchmark           | lz4       | safelz4              |
 |--------------------------------------|-----------|----------------------|
@@ -181,7 +183,7 @@ Special thanks also to the maintainers of the [lz4_flex](https://github.com/PSei
 
 `LZ4` implementations, including:
 
-| Python Library    | Build Status | Version | Licence | 
+| Python Library    | Build Status | Version | Licence |
 | -------- | ------- | ------- | ------- |
 | [python-lz4](https://github.com/python-lz4/python-lz4) | [![Build Status](https://github.com/python-lz4/python-lz4/actions/workflows/build_dist.yml/badge.svg)](https://github.com/python-lz4/python-lz4/actions/workflows/build_dist.yml)| ![](https://img.shields.io/pypi/v/lz4) | ![PyPI - License](https://img.shields.io/pypi/l/lz4)
 
