@@ -27,7 +27,7 @@ def decompression_write_safelz4(file: tempfile.NamedTemporaryFile, chunk_size: i
                  ...
         
 
-def benchmark_compression(name: str, _callable : Callable[[tempfile.NamedTemporaryFile, int], None]):
+def benchmark_decompression(name: str, _callable : Callable[[tempfile.NamedTemporaryFile, int], None]):
     filename = os.path.join(samples, name)
     
     if not os.path.exists(filename):
@@ -41,7 +41,7 @@ def benchmark_compression(name: str, _callable : Callable[[tempfile.NamedTempora
 
 def main():
     for name in AVAILABLE_FILES:
-        benchmark_compression(name, decompression_write_safelz4)
+        benchmark_decompression(name, decompression_write_safelz4)
 
 if __name__ == "__main__":
     main()

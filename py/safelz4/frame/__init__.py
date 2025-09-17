@@ -1,9 +1,15 @@
 import os
 import io
-from typing import Union, Optional, Literal, Iterable
-from typing_extensions import Buffer
+from typing import Union, Optional, Literal, IO, List
+from types import TracebackType
 from safelz4.error import LZ4Exception
 from safelz4._safelz4_rs import _frame
+
+try:
+    from typing import Self
+except ImportError:
+    # NOTE For Python < 3.12
+    from typing_extensions import Self
 
 __all__ = [
     "FrameInfo",
@@ -63,7 +69,7 @@ BLOCK_INFO_SIZE = _frame.BLOCK_INFO_SIZE
 
 
 def is_framefile(
-    name: Union[os.PathLike, str, bytes, io.BufferedReader]
+    name: Union[os.PathLike, str, bytes, io.BufferedReader],
 ) -> bool:
     """
     Return True if `name` is a valid LZ4 frame file or buffer, else False.
@@ -93,18 +99,84 @@ def is_framefile(
         return False
 
 
-class DecoderReaderWrapper(io.BufferedIOBase):
+class WrappedDecoderReader(IO[bytes]):
     """
-    Wrapper that combines io.BufferedIOBase interface with FrameDecoderReader
+    Wrapper that combines IO[bytes] interface with FrameDecoderReader
     functionality. This makes the LZ4 decoder compatible with Python's
     standard I/O system.
     """
 
-    def __init__(self, filename: str) -> None:
-        # Initialize the parent FrameDecoderReader
-        self._inner = _frame.FrameDecoderReader(filename)
+    def __init__(
+        self,
+        filename: Union[os.PathLike, str],
+        mode: Optional[Literal["rb", "rb|lz4"]] = None,
+    ) -> None:
+        self._inner = _frame.FrameDecoderReader(filename=filename, mode=mode)
 
-    # BufferedIOBase required methods
+    @property
+    def mode(self) -> str:
+        return self._inner.mode
+
+    @property
+    def name(self) -> str:
+        """return name of the file."""
+        return str(self._inner.name)
+
+    @property
+    def closed(self) -> bool:
+        """Returns True if the file is closed."""
+        return self._inner.closed
+
+    @property
+    def block_size(self) -> _frame.BlockSize:
+        """
+        Returns the block size used in the LZ4 frame.
+
+        Returns:
+            (`BlockSize`): Enum representing the block size.
+        """
+        return self._inner.block_size
+
+    @property
+    def content_size(self) -> Optional[int]:
+        """
+        Returns the content size specified in the LZ4 frame header.
+
+        Returns:
+            (`Optional[int]`): Content size if present, or None.
+        """
+        return self._inner.content_size
+
+    @property
+    def block_checksum(self) -> bool:
+        """
+        Checks if block checksums are enabled for this frame.
+
+        Returns:
+            (`bool`): True if block checksums are enabled, False otherwise.
+        """
+        return self._inner.block_checksum
+
+    @property
+    def frame_info(self) -> _frame.FrameInfo:
+        """
+        Returns a copy of the parsed frame header.
+
+        Returns:
+            (`FrameInfo`): Frame header metadata object.
+        """
+        return self._inner.frame_info
+
+    @property
+    def current_block(self) -> int:
+        """
+        Return the amounf of blocks that has been read.
+
+        Returns:
+            (`int`): current block number
+        """
+        return self._inner.current_block
+
     def readable(self) -> bool:
         """Returns True since this is a readable stream."""
         return not self._inner.closed
@@ -114,33 +186,14 @@ class DecoderReaderWrapper(io.BufferedIOBase):
         return False
 
     def seekable(self) -> bool:
-        """Returns True if seeking is supported."""
-        return not self._inner.closed
+        """Returns False since LZ4 streams don't support seeking."""
+        return False
 
     def tell(self) -> int:
         """Returns current position in block stream."""
-        return self.offset()
+        return self._inner.offset()
 
-    def seek(self, pos: int, whence: int = io.SEEK_SET) -> int:
-        """
-        Seek to position in the stream.
-
-        Args:
-            pos: Position to seek to
-            whence: How to interpret pos (SEEK_SET, SEEK_CUR, SEEK_END)
-
-        Returns:
-            New absolute position
-
-        Raises:
-            ValueError: If the file is closed
-            io.UnsupportedOperation: If seeking is not supported
-        """
-        if self.closed:
-            raise ValueError("I/O operation on closed file")
-        raise io.UnsupportedOperation("seek")
-
-    def read(self, size: Optional[int] = -1) -> bytes:
+    def read(self, n: int = -1) -> bytes:
         """
         Read and return up to size bytes.
 
@@ -151,85 +204,187 @@ class DecoderReaderWrapper(io.BufferedIOBase):
 
         Returns:
             (`bytes`): block read from the stream return sized bytes of said
-                       block
+                       block.
 
         Raises:
-            (`ValueError`): If the file is closed
+            (`ValueError`):
+                Rasied if the file is closed
+            (`ReadError`):
+                Raised if the input stream cannot be read or is incomplete.
+            (`DecompressionError`):
+                Raised if the source buffer cannot be decompressed
+                into the destination buffer, typically due to corrupt or
+                malformed input.
+            (`LZ4Exception`):
+                Raised if a block checksum does not match the expected value,
+                indicating potential data corruption.
         """
-        return self._inner.read(size)
+        if self.closed:
+            raise ValueError("I/O operation on closed file")
+        return self._inner.read(n)
 
-    def read1(self, size: int = -1) -> bytes:
-        """Read and return up to size bytes from the stream."""
-        return self.read(size)
-
-    def readinto(self, b: Buffer) -> Optional[int]:
+    def readline(self, limit: int = -1) -> bytes:
         """
-        Read data into a pre-allocated buffer.
+        Read and return one line from the stream.
 
         Args:
-            b (`Buffer`):
-                Buffer to read into (must support buffer protocol)
+            limit (`int`, **optional**, default: -1):
+                Maximum number of bytes to read.
+                If -1, read until newline or EOF.
 
         Returns:
-            (`Optional[int]`): Number of bytes read, or None if EOF
+            (`bytes`): A single line including the trailing newline character,
+                or empty bytes if EOF is reached.
 
         Raises:
-            (`ValueError`): If the file is closed
+            (`ValueError`):
+                Rasied if the file is closed
+            (`ReadError`):
+                Raised when there is an issue reading the block.
+            (`DecompressionError`):
+                Raised decompression method is not supported or when
+                the data cannot be decoded properly.
         """
         if self.closed:
             raise ValueError("I/O operation on closed file")
 
-        data = self.read(len(b))
-        if not data:
-            return 0
+        line = b""
+        bytes_read = 0
 
-        bytes_read = len(data)
-        b[:bytes_read] = data
-        return bytes_read
+        while limit == -1 or bytes_read < limit:
+            # Read one byte at a time to find newline
+            chunk = self._inner.read(1)
+            if not chunk:  # EOF reached
+                break
 
-    def readinto1(self, b: Buffer) -> int:
-        """Read data into buffer, single call to underlying raw stream."""
-        result = self.readinto(b)
-        return result if result is not None else 0
+            line += chunk
+            bytes_read += 1
+
+            # Check if we found a newline
+            if chunk == b"\n":
+                break
+
+        return line
+
+    def readlines(self, hint: int = -1) -> List[bytes]:
+        """
+        Read and return a list of lines from the stream.
+
+        Args:
+            hint (`int`, **optional**, default: -1):
+                Approximate number of bytes to read.
+                If -1, read all lines.
+
+        Returns:
+            (`List[bytes]`): List of lines, each including trailing newline.
+
+        Raises:
+            (`ValueError`):
+                Raised if the file is closed
+        """
+        if self.closed:
+            raise ValueError("I/O operation on closed file")
+
+        lines = []
+        bytes_read = 0
+
+        while hint == -1 or bytes_read < hint:
+            line = self.readline()
+            if not line:  # EOF reached
+                break
+
+            lines.append(line)
+            bytes_read += len(line)
+
+            # If hint is specified and we've read enough, break
+            if hint != -1 and bytes_read >= hint:
+                break
+
+        return lines
+
+    def close(self) -> None:
+        """Close the stream."""
+        if not self.closed:
+            self._inner.close()
+
+    def __enter__(self) -> Self:
+        """Context manager entry"""
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
+        """Context manager exit"""
+        self._inner.__exit__(exc_type, exc_value, traceback)
+
+    def __str__(self):
+        return f"<safelz4.frame.EncoderReader name={self.name}>"
+
+    def __repr__(self):
+        return f"<safelz4.frame.EncoderReader name={self.name}>"
 
 
-class EncoderWriterWrapper(io.BufferedIOBase):
+class WrappedEncoderWriter(IO[bytes]):
     """
-    Wrapper that combines io.BufferedIOBase interface with
+    Wrapper that combines IO[bytes] interface with
     FrameEncoderWriter functionality. This makes the LZ4
     encoder compatible with Python's standard I/O system.
     """
 
     def __init__(
         self,
-        filename: str,
+        filename: Union[os.PathLike, str],
+        mode: Literal["wb", "wb|lz4"],
         block_size: _frame.BlockSize = BlockSize.Auto,
         block_mode: _frame.BlockMode = BlockMode.Independent,
         block_checksums: Optional[bool] = None,
-        dict_id: Optional[bool] = None,
+        dict_id: Optional[int] = None,
         content_checksum: Optional[bool] = None,
         content_size: Optional[int] = None,
         legacy_frame: Optional[bool] = None,
     ) -> None:
         self._inner = _frame.FrameEncoderWriter(
-            filename,
-            block_size,
-            block_mode,
-            block_checksums,
-            dict_id,
-            content_checksum,
-            content_size,
-            legacy_frame,
+            filename=filename,
+            mode=mode,
+            block_size=block_size,
+            block_mode=block_mode,
+            block_checksums=block_checksums,
+            dict_id=dict_id,
+            content_checksum=content_checksum,
+            content_size=content_size,
+            legacy_frame=legacy_frame,
         )
 
-    # BufferedIOBase required methods
+    @property
+    def mode(self) -> str:
+        return self._inner.mode
+
+    @property
+    def name(self) -> str:
+        return str(self._inner.name)
+
+    @property
+    def closed(self) -> bool:
+        return self._inner.closed
+
+    @property
+    def offset(self) -> int:
+        return self._inner.offset
+
+    @property
+    def frame_info(self) -> _frame.FrameInfo:
+        return self._inner.frame_info
+
     def readable(self) -> bool:
         """Returns False since this is write-only."""
         return False
 
     def writable(self) -> bool:
         """Returns True since this is a writable stream."""
-        return not self._inner.closed
+        return not self.closed
 
     def seekable(self) -> bool:
         """
@@ -240,49 +395,56 @@ class EncoderWriterWrapper(io.BufferedIOBase):
 
     def tell(self) -> int:
         """Returns current position in the stream."""
-        return self._inner.offset()
+        return self.offset
 
-    def write(self, data: Union[bytes, bytearray, memoryview]) -> int:
+    def write(self, data: bytes) -> int:
         """
         Write data to the stream.
 
         Args:
-            data: Data to write (bytes-like object)
+            data (`bytes`): Data to write.
 
         Returns:
-            Number of bytes written
+            (`int`): Number of bytes written.
 
         Raises:
-            ValueError: If the file is closed
-            TypeError: If data is not a bytes-like object
+            (`ValueError`): If the file is closed.
+            (`TypeError`): If data is not a bytes-like object.
+            (`LZ4Exception`):
+                within FrameEncoderWriter rasied when the file is closed.
+            (`CompressionError`):
+                raised when a compression method is not supported or when
+                the data cannot be encoded properly.
         """
-        if self._inner.closed:
+        if self.closed:
             raise ValueError("I/O operation on closed file")
 
-        # Convert to bytes if necessary
-        if isinstance(data, (bytearray, memoryview)):
-            data = bytes(data)
-        elif not isinstance(data, bytes):
+        if not isinstance(data, bytes):
             raise TypeError(
                 f"Expected bytes-like object, got {type(data).__name__}"
             )
 
-        # Use the parent class's write method
         return self._inner.write(data)
 
-    def writelines(
-        self, lines: Iterable[Union[bytes, bytearray, memoryview]]
-    ) -> None:
+    def writelines(self, lines: List[bytes]) -> None:
         """
         Write a list of bytes-like objects to the stream.
 
         Args:
-            lines: Iterable of bytes-like objects
+            lines (`List[bytes]`): Iterable of bytes-like objects.
 
         Raises:
-            ValueError: If the file is closed
+            (`ValueError`):
+                Raised when file is closed.
+            (`TypeError`):
+                Rasied if data is not a bytes-like object.
+            (`LZ4Exception`):
+                Rasied if within FrameEncoderWriter, when the file is closed.
+            (`CompressionError`):
+                Raised when a compression method is not supported or when
+                the data cannot be encoded properly.
         """
-        if self._inner.closed:
+        if self.closed:
             raise ValueError("I/O operation on closed file")
 
         for line in lines:
@@ -293,9 +455,12 @@ class EncoderWriterWrapper(io.BufferedIOBase):
         Flush the internal buffer to disk.
 
         Raises:
-            ValueError: If the file is closed
+            (`LZ4Exception`):
+                Rasied when the file is closed.
+            (`IOError`):
+                Raised when the file is unable to flush.
         """
-        if self._inner.closed:
+        if self.closed:
             raise ValueError("I/O operation on closed file")
         self._inner.flush()
 
@@ -304,85 +469,113 @@ class EncoderWriterWrapper(io.BufferedIOBase):
         Close the stream and flush any remaining data.
 
         Raises:
-            IOError: If flushing fails during close
+            (`IOError`):
+                Raised when the file is unable to flush.
         """
-        if not self._inner.closed:
+        if not self.closed:
             self._inner.close()
+
+    def __enter__(self) -> Self:
+        """Context manager entry."""
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
+        """Context manager exit."""
+        self._inner.__exit__(exc_type, exc_value, traceback)
+
+    def __str__(self):
+        return f"<safelz4.frame.WrappedDecoderReader name={self.name}>"
+
+    def __repr__(self):
+        return f"<safelz4.frame.WrappedDecoderReader name={self.name}>"
 
 
 def open(
     filename: Union[str, os.PathLike],
     mode: Optional[Literal["rb", "rb|lz4", "wb", "wb|lz4"]] = None,
+    *,
     block_size: _frame.BlockSize = BlockSize.Auto,
     block_mode: _frame.BlockMode = BlockMode.Independent,
     block_checksums: Optional[bool] = None,
-    dict_id: Optional[bool] = None,
+    dict_id: Optional[int] = None,
     content_checksum: Optional[bool] = None,
     content_size: Optional[int] = None,
     legacy_frame: Optional[bool] = None,
-) -> Union[DecoderReaderWrapper, EncoderWriterWrapper]:
+) -> IO[bytes]:
     """
     Returns a context manager for reading or writing lz4 frames.
 
     Example:
 
-    ```
+    ```python
     import os
     import safelz4
-
     from typing import Union
 
     MEGABYTE = 1024 * 1024
 
-    def chunk(filename : Union[os.PathLike, str], chunk_size : int = 1024):
+    def chunk(filename: Union[os.PathLike, str], chunk_size: int = 1024):
         with open(filename, "rb") as f:
             while content := f.read(chunk_size):
                 yield content
 
-    chunk_size = 1024
+    # Writing LZ4 compressed data
     with safelz4.open("datafile.lz4", "wb") as file:
-            for buf in chunk("datafile.txt", MEGABYTE)
-                file.write(content)
+        for content in chunk("datafile.txt", MEGABYTE):
+            file.write(content)
     ```
 
     OR
 
-    ```
+    ```python
     import safelz4
 
+    # Reading LZ4 compressed data
     chunk_size = 1024
     with safelz4.open("datafile.lz4", "rb") as file:
-        while content := f.read(chunk_size):
+        while content := file.read(chunk_size):
             print(content)
     ```
 
     OR
 
-    ```
+    ```python
     import safelz4
 
+    # Reading without context manager
     chunk_size = 1024
-    FILE = safelz4.open("datafile.lz4", "rb")
-
-    while content := FILE.read(chunk_size):
-        print(content)
-    FILE.close()
+    file = safelz4.open("datafile.lz4", "rb")
+    try:
+        while content := file.read(chunk_size):
+            print(content)
+    finally:
+        file.close()
     ```
     """
     if mode is None:
-        return DecoderReaderWrapper(filename)
-    elif mode in ("rb", "rb|lz4"):
-        return DecoderReaderWrapper(filename)
+        mode = "rb"
+
+    if mode in ("rb", "rb|lz4"):
+        return WrappedDecoderReader(filename=filename, mode=mode)
     elif mode in ("wb", "wb|lz4"):
-        return EncoderWriterWrapper(
-            filename,
-            block_size,
-            block_mode,
-            block_checksums,
-            dict_id,
-            content_checksum,
-            content_size,
-            legacy_frame,
+        return WrappedEncoderWriter(
+            filename=filename,
+            mode=mode,
+            block_size=block_size,
+            block_mode=block_mode,
+            block_checksums=block_checksums,
+            dict_id=dict_id,
+            content_checksum=content_checksum,
+            content_size=content_size,
+            legacy_frame=legacy_frame,
         )
     else:
-        raise ValueError(f"Unsupported mode: {mode}")
+        raise ValueError(
+            f"Unsupported mode: {mode}. Supported modes are: "
+            "'rb', 'rb|lz4', 'wb', 'wb|lz4'"
+        )
