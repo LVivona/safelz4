@@ -3,7 +3,7 @@ name = "safelz4_py"
 version = "0.0.5"
 edition = "2021"
 description = """
-High-performance Rust bindings to the LZ4 compression algorithm. Ideal for fast, lightweight data compression in systems programming, file formats, or network protocols. 
+High-performance Rust bindings to the LZ4 compression algorithm. Ideal for fast, lightweight data compression in systems programming, file formats, or network protocols.
 """
 exclude = ["benches/*", "tests/*", "fuzz/*", "examples/*"]
 
