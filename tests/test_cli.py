@@ -19,39 +19,30 @@ def test_compress_and_decompress_file(block_mode):
         tmp_path = Path(tmp_dir)
         output_file = tmp_path / "output.slz4"
         input_file = FILE_1Kb
-        
+
+        # Compress
         with open(output_file, "wb") as stdout:
-            try:
-                # Compress
-                result = subprocess.run(
-                    ["slz4", "-c", block_mode, "-i", str(input_file)],
-                    stdout=stdout,
-                    check=True,
-                )
-                print(f"Compression stdout: {result.stdout}")
-                print(f"Compression stderr: {result.stderr}")
-                print(f"Output file exists: {output_file.exists()}")
-                if output_file.exists():
-                    print(f"Output file size: {output_file.stat().st_size}")
-                
-                assert output_file.exists(), f"Output file was not created: {output_file}"
-                assert output_file.stat().st_size > 0, f"Output file is empty: {output_file}"
+            subprocess.run(
+                ["slz4", "-c", block_mode, "-i", str(input_file)],
+                stdout=stdout,
+                check=True,
+            )
 
-                # Decompress
-                result = subprocess.run(
-                    ["slz4", "-d", "-i", block_mode, str(output_file)],
-                    check=True,
-                    capture_output=True,
-                    text=True
-                )
-                print(f"Decompression stdout: {result.stdout}")
-                print(f"Decompression stderr: {result.stderr}")
-                
-                with open(FILE_1Kb, "r") as file:
-                    assert result.stdout == file.read()
+        assert (
+            output_file.exists()
+        ), f"Output file was not created: {output_file}"
+        assert (
+            output_file.stat().st_size > 0
+        ), f"Output file is empty: {output_file}"
 
-            except Exception:
-                raise
+        # Decompress
+        result = subprocess.run(
+            ["slz4", "-d", block_mode, "-i", str(output_file)],
+            check=True,
+            capture_output=True,
+        )
+        with open(FILE_1Kb, "rb") as file:
+            assert result.stdout == file.read()
 
 
 def test_block_compress_with_include_size():
@@ -60,26 +51,21 @@ def test_block_compress_with_include_size():
         tmp_path = Path(tmp_dir)
         input_file = tmp_path / "input.txt"
         output_file = tmp_path / "output.slz4"
-        
-        # Write test data to input file
+
         input_file.write_bytes(TEST_TEXT)
-        print(f"Input file created: {input_file}, size: {len(TEST_TEXT)}")
-        
+
         with open(output_file, "wb") as stdout:
-            result = subprocess.run(
+            subprocess.run(
                 ["slz4", "-c", "-b", "--include-size", str(input_file)],
                 stdout=stdout,
                 check=True,
             )
-            print(f"Compression result: stdout='{result.stdout}', stderr='{result.stderr}'")
-            print(f"Output file exists: {output_file.exists()}")
-        
+
         result = subprocess.run(
             ["slz4", "-d", "-b", "--include-size", str(output_file)],
             check=True,
             capture_output=True,
         )
-        print(f"Decompression result: stdout length={len(result.stdout) if result.stdout else 0}")
         assert result.stdout == TEST_TEXT
 
 
@@ -89,26 +75,28 @@ def test_block_decompress_with_manual_size():
         tmp_path = Path(tmp_dir)
         input_file = tmp_path / "input.txt"
         output_file = tmp_path / "output.slz4"
-        
-        # Write test data to input file
+
         input_file.write_bytes(TEST_TEXT)
-        print(f"Input file created: {input_file}, size: {len(TEST_TEXT)}")
-        
+
         with open(output_file, "wb") as stdout:
-            result = subprocess.run(
+            subprocess.run(
                 ["slz4", "-c", "-b", str(input_file)],
                 stdout=stdout,
                 check=True,
             )
-            print(f"Compression result: stdout='{result.stdout}', stderr='{result.stderr}'")
-            print(f"Output file exists: {output_file.exists()}")
-        
+
         result = subprocess.run(
-            ["slz4", "-d", "-b", "--size", str(len(TEST_TEXT)), str(output_file)],
+            [
+                "slz4",
+                "-d",
+                "-b",
+                "--size",
+                str(len(TEST_TEXT)),
+                str(output_file),
+            ],
             check=True,
             capture_output=True,
         )
-        print(f"Decompression result: stdout length={len(result.stdout) if result.stdout else 0}")
         assert result.stdout == TEST_TEXT
 
 
@@ -118,30 +106,31 @@ def test_frame_options_blocksize():
         tmp_path = Path(tmp_dir)
         input_file = tmp_path / "input.txt"
         output_file = tmp_path / "output.slz4"
-        
-        # Write test data to input file
+
         input_file.write_bytes(TEST_TEXT)
-        print(f"Input file created: {input_file}, size: {len(TEST_TEXT)}")
-        
+
         with open(output_file, "wb") as stdout:
-            result = subprocess.run(
+            subprocess.run(
                 [
-                    "slz4", "-c", "-f", "--block-size", "256kb",
-                    "--content-checksum", "--block-checksums", "--block-independence",
+                    "slz4",
+                    "-c",
+                    "-f",
+                    "--block-size",
+                    "256kb",
+                    "--content-checksum",
+                    "--block-checksums",
+                    "--block-independence",
                     str(input_file),
                 ],
                 stdout=stdout,
                 check=True,
             )
-            print(f"Compression result: stdout='{result.stdout}', stderr='{result.stderr}'")
-            print(f"Output file exists: {output_file.exists()}")
-        
+
         result = subprocess.run(
             ["slz4", "-d", "-f", str(output_file)],
             check=True,
             capture_output=True,
         )
-        print(f"Decompression result: stdout length={len(result.stdout) if result.stdout else 0}")
         assert result.stdout == TEST_TEXT
 
 
