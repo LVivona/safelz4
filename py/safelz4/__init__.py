@@ -23,6 +23,8 @@ Architecture:
     * error - Comprehensive exception hierarchy for precise error handling
 
 Example Usage:
+```
+
     >>> import safelz4
     >>>
     >>> # Frame-level compression
@@ -39,6 +41,7 @@ Example Usage:
     ...     while chunk := compressed_file.read(8192):
     ...         process_data(chunk)
 
+```
 Performance Characteristics:
     SafeLZ4 is optimized for scenarios requiring fast compression/decompression
     with moderate compression ratios. It excels in real-time data processing,
