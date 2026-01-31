@@ -12,7 +12,7 @@ use memmap2::{Mmap, MmapOptions};
 
 use pyo3::exceptions::{PyFileExistsError, PyIOError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyBytes;
+use pyo3::types::{PyAny, PyBytes};
 use pyo3::Bound as PyBound;
 
 use lz4_flex::frame::{BlockMode, BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
@@ -1216,7 +1216,7 @@ impl PyFrameDecoderReader {
     }
 
     /// Context manager exit
-    pub fn __exit__(&mut self, _exc_type: PyObject, _exc_value: PyObject, _traceback: PyObject) {
+    pub fn __exit__(&mut self, _exc_type: Py<PyAny>, _exc_value: Py<PyAny>, _traceback: Py<PyAny>) {
         // INFO: by setting the inner storage to `None` we drop all the memeory
         //       the mmap has allocated.
         self.close();
@@ -1370,9 +1370,9 @@ impl PyFrameEncoderWriter {
 
     pub fn __exit__(
         &mut self,
-        _exc_type: PyObject,
-        _exc_value: PyObject,
-        _traceback: PyObject,
+        _exc_type: Py<PyAny>,
+        _exc_value: Py<PyAny>,
+        _traceback: Py<PyAny>,
     ) -> PyResult<()> {
         self.close()
     }
