@@ -5,7 +5,7 @@ PYTHON ?= python
 PIP ?= pip
 PYTEST ?= pytest
 BLACK ?= black
-BLACK_OPTS ?= --line-length 80 --target-version py35
+BLACK_OPTS ?= --line-length 80 --target-version py38
 
 # Source directories
 SRC_DIRS ?= py/safelz4 tests
