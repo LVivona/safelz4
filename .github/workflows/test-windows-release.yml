@@ -15,7 +15,7 @@ permissions:
   contents: read
 jobs:
   windows:
-    runs-on: ${{ matrix.runner.os }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
@@ -54,5 +54,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           # Unique name per job to prevent overwrite errors
-          name: wheels-${{ matrix.runner.os }}-${{ matrix.runner.target }}-${{ matrix.python-version }}
+          name: wheels-${{ matrix.runner }}-${{ matrix.runner.target }}-${{ matrix.python-version }}
           path: dist
