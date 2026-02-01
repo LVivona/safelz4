@@ -29,7 +29,7 @@ jobs:
           - runner: windows-11-arm
             target: aarch64
             python_arch: arm64
-        python-version: ["3.14", "3.14t", "3.13"]
+        python-version: ["3.14", "3.15t", "3.13"]
 
     steps:
       - name: Checkout code
