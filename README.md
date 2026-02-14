@@ -18,6 +18,8 @@ Python bindings for [lz4_flex](https://github.com/PSeitz/lz4_flex), the fastest 
 
 ## Installation
 
+**NOTE**: Windows free-threaded (no-GIL) CPython builds require installation from source (no prebuilt wheels available).
+
 ### Pip
 
 You can install `safelz4` via the pip manager:
