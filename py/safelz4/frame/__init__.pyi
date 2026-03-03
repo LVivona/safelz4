@@ -71,6 +71,7 @@ class BlockSize(IntEnum):
     def from_buf_length(buf_len: int):
         """Try to find optimal size based on passed buffer length."""
         ...
+
     def get_size(self) -> int:
         """Return the size in bytes"""
         ...
@@ -107,13 +108,16 @@ class FrameInfo:
             (`FrameInfo`): default object.
         """
         ...
+
     @staticmethod
     def read_header_info(input: bytes) -> Self:
         """Read bytes info to construct frame header."""
         ...
+
     def read_header_size(input: bytes) -> Self:
         """Read the size of the frame header info"""
         ...
+
     @property
     def block_checksums(self) -> bool: ...
     @block_checksums.setter
@@ -378,6 +382,7 @@ class FrameDecoderReader:
             (`int`): Offset in bytes to the start of the first data block.
         """
         ...
+
     @getattr
     def current_block(self) -> int:
         """
@@ -387,6 +392,7 @@ class FrameDecoderReader:
             (`int`): current block number.
         """
         ...
+
     @getattr
     def content_size(self) -> Optional[int]:
         """
@@ -396,6 +402,7 @@ class FrameDecoderReader:
             (`Optional[int]`): Content size if present, or None.
         """
         ...
+
     @getattr
     def block_size(self) -> BlockSize:
         """
@@ -405,6 +412,7 @@ class FrameDecoderReader:
             (`BlockSize`): Enum representing the block size.
         """
         ...
+
     @getattr
     def block_checksum(self) -> bool:
         """
@@ -414,6 +422,7 @@ class FrameDecoderReader:
             (`bool`): True if block checksums are enabled, False otherwise.
         """
         ...
+
     @getattr
     def frame_info(self) -> FrameInfo:
         """
@@ -423,6 +432,7 @@ class FrameDecoderReader:
             (`FrameInfo`): Frame header metadata object.
         """
         ...
+
     def read(self, size: int) -> bytes:
         """
         Reads and returns a decompressed block of the specified size.
@@ -450,9 +460,11 @@ class FrameDecoderReader:
                 indicating potential data corruption.
         """
         ...
+
     def close(self) -> None:
         """close file"""
         ...
+
     def __enter__(self) -> Self:
         """
         Context manager entry.
@@ -461,6 +473,7 @@ class FrameDecoderReader:
             (`FrameDecoderReader`): The reader instance itself.
         """
         ...
+
     def __exit__(
         self,
         exc_type: Optional[type[BaseException]],
@@ -471,6 +484,7 @@ class FrameDecoderReader:
         Context manager exit
         """
         ...
+
     def __str__(self) -> str: ...
     def __repr__(self) -> str: ...
 
@@ -516,6 +530,7 @@ class FrameEncoderWriter:
             (`int`): The number of bytes written so far.
         """
         ...
+
     def write(self, input: bytes) -> int:
         """
         Writes bytes into the LZ4 frame.
@@ -530,6 +545,7 @@ class FrameEncoderWriter:
             (`CompressionError`): If compression or writing fails.
         """
         ...
+
     def mode(self) -> Literal["wb", "wb|lz4"]:
         """
         Return current mode
@@ -538,6 +554,7 @@ class FrameEncoderWriter:
             (`Literal["wb", "rb"]`): mode of reading or writing into file.
         """
         ...
+
     def flush(self) -> None:
         """
         Flushes the internal buffer to disk.
@@ -546,6 +563,7 @@ class FrameEncoderWriter:
             (`IOError`): If flushing fails.
         """
         ...
+
     def close(self) -> None:
         """
         Closes the writer and flushes any remaining data.
@@ -554,6 +572,7 @@ class FrameEncoderWriter:
             (`IOError`): If flushing fails during close.
         """
         ...
+
     def __enter__(self) -> Self:
         """
         Context manager entry — returns self.
@@ -562,6 +581,7 @@ class FrameEncoderWriter:
             (`FrameEncoderWriter`): The writer instance itself.
         """
         ...
+
     def __exit__(
         self,
         exc_type: Optional[type[BaseException]],
@@ -606,15 +626,19 @@ class WrappedDecoderReader(IO[bytes]):
     def readable(self) -> bool:
         """Returns True since this is a readable stream."""
         ...
+
     def writable(self) -> bool:
         """Returns False since this is read-only."""
         ...
+
     def seekable(self) -> bool:
         """Returns True if seeking is supported."""
         ...
+
     def tell(self) -> int:
         """Returns current position in block stream."""
         ...
+
     def read(self, n: int = -1) -> bytes:
         """
         Read and return up to size bytes.
@@ -642,6 +666,7 @@ class WrappedDecoderReader(IO[bytes]):
                 indicating potential data corruption.
         """
         ...
+
     def readline(self, limit: int = -1) -> bytes:
         """
         Read and return one line from the stream.
@@ -665,6 +690,7 @@ class WrappedDecoderReader(IO[bytes]):
                 the data cannot be decoded properly.
         """
         ...
+
     def readlines(self, hint: int = -1) -> List[bytes]:
         """
         Read and return a list of lines from the stream.
@@ -682,9 +708,11 @@ class WrappedDecoderReader(IO[bytes]):
                 Raised if the file is closed
         """
         ...
+
     def __enter__(self) -> Self:
         """Context manager entry"""
         ...
+
     def __exit__(
         self,
         exc_type: Optional[type[BaseException]],
@@ -693,6 +721,7 @@ class WrappedDecoderReader(IO[bytes]):
     ) -> None:
         """Context manager exit"""
         ...
+
     def __str__(self): ...
     def __repr__(self): ...
 
@@ -729,18 +758,22 @@ class WrappedEncoderWriter(IO[bytes]):
     def readable(self) -> bool:
         """Returns False since this is write-only."""
         ...
+
     def writable(self) -> bool:
         """Returns True since this is a writable stream."""
         ...
+
     def seekable(self) -> bool:
         """
         Returns False since writing streams typically
         don't support seeking.
         """
         ...
+
     def tell(self) -> int:
         """Returns current position in the stream."""
         ...
+
     def write(self, data: bytes) -> int:
         """
         Write data to the stream.
@@ -756,6 +789,7 @@ class WrappedEncoderWriter(IO[bytes]):
             (`TypeError`): If data is not a bytes-like object.
         """
         ...
+
     def writelines(self, lines: List[bytes]) -> None:
         """
         Write a list of bytes-like objects to the stream.
@@ -767,6 +801,7 @@ class WrappedEncoderWriter(IO[bytes]):
             (`ValueError`): If the file is closed.
         """
         ...
+
     def flush(self) -> None:
         """
         Flush the internal buffer to disk.
@@ -775,6 +810,7 @@ class WrappedEncoderWriter(IO[bytes]):
             (`ValueError`): If the file is closed.
         """
         ...
+
     def close(self) -> None:
         """
         Close the stream and flush any remaining data.
@@ -783,9 +819,11 @@ class WrappedEncoderWriter(IO[bytes]):
             (`IOError`): If flushing fails during close.
         """
         ...
+
     def __enter__(self) -> Self:
         """Context manager entry."""
         ...
+
     def __exit__(
         self,
         exc_type: Optional[type[BaseException]],
@@ -794,6 +832,7 @@ class WrappedEncoderWriter(IO[bytes]):
     ) -> None:
         """Context manager exit."""
         ...
+
     def __str__(self): ...
     def __repr__(self): ...
 

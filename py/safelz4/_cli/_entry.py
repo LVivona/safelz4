@@ -235,9 +235,11 @@ def main() -> int:
                         args.output.name,
                         mode="wb",
                         block_size=args.block_size,
-                        block_mode=safelz4.BlockMode.Independent
-                        if args.block_independence
-                        else safelz4.BlockMode.Linked,
+                        block_mode=(
+                            safelz4.BlockMode.Independent
+                            if args.block_independence
+                            else safelz4.BlockMode.Linked
+                        ),
                         content_checksum=args.content_checksum,
                         block_checksums=args.block_checksums,
                         legacy_frame=args.legacy_frame,
