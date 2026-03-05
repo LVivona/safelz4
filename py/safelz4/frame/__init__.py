@@ -321,10 +321,10 @@ class WrappedDecoderReader(IO[bytes]):
         self._inner.__exit__(exc_type, exc_value, traceback)
 
     def __str__(self):
-        return f"<safelz4.frame.EncoderReader name={self.name}>"
+        return f"<safelz4.frame.WrappedDecoderReader name={self.name}>"
 
     def __repr__(self):
-        return f"<safelz4.frame.EncoderReader name={self.name}>"
+        return f"<safelz4.frame.WrappedDecoderReader name={self.name}>"
 
 
 class WrappedEncoderWriter(IO[bytes]):
@@ -489,10 +489,10 @@ class WrappedEncoderWriter(IO[bytes]):
         self._inner.__exit__(exc_type, exc_value, traceback)
 
     def __str__(self):
-        return f"<safelz4.frame.WrappedDecoderReader name={self.name}>"
+        return f"<safelz4.frame.WrappedDecoderWriter name={self.name}>"
 
     def __repr__(self):
-        return f"<safelz4.frame.WrappedDecoderReader name={self.name}>"
+        return f"<safelz4.frame.WrappedDecoderWriter name={self.name}>"
 
 
 def open(
